@@ -13,22 +13,20 @@
 #include "vector3f.h"
 
 __global__ void gpu_boids_kernel() {
-
+  
 }
 
-static double device_time = 0.0;
+//static double device_time = 0.0;
 
 void help() {
    fprintf(stderr,"./boids --help|-h --nboids|-n \n");
 }
 
-int main (int argc, char* argv[])
-{
-   /* Define the number of boids. The default is 1000. */
+int main (int argc, char* argv[]) {
+   /* Define the number of boids. The default is 1000. /
    int n = 1000;
 
-   for (int i = 1; i < argc; ++i)
-   {
+   for (int i = 1; i < argc; ++i) {
 #define check_index(i,str) \
    if ((i) >= argc) \
       { fprintf(stderr,"Missing 2nd argument for %s\n", str); return 1; }
@@ -56,7 +54,9 @@ int main (int argc, char* argv[])
 
 
    // Memory Deallocation
-
+*/
+   fprintf(stdout,"entering kernel.\n");
+   gpu_boids_kernel<<<1,1>>>();
    return 0;
 }
 

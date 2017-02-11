@@ -1,4 +1,5 @@
 
+#include <cstdlib>
 #include "boid.h"
 
 Boid::Boid() {
@@ -31,15 +32,15 @@ void Boid::applyForce(Vector3f position) {
     this->acceleration.addVectors(position);
 }
 
-Vector3f Boid::Separation(Flock flock) {
+Vector3f Boid::SeparationRule(std::vector<Boid> flock) {
   Vector3f steer = Vector3f(0, 0, 0);
   int count = 0;
-  for (int i = 0;i < flock.getSize(); i++) {
-    float d = this->position.distanceBetweenVectors(flock.getBoidfromIndex(i).getPosition());
+  for (int i = 0;i < flock.size(); i++) {
+    float d = this->position.distanceBetweenVectors(flock[i].getPosition());
     // Move away from fellow boid if too close
     if (d > 0 && d < this->desiredSeparation) {
      Vector3f delta = Vector3f(0, 0, 0);
-     delta = this->position.diffVectors(flock.getBoidfromIndex(i).getPosition());
+     delta = this->position.diffVectors(flock[i].getPosition());
      delta.normalize();
      delta.divByScalar(d);
      steer.addVectors(delta);
@@ -71,14 +72,14 @@ Vector3f Boid::seek(Vector3f sum) {
     return acceleration;
 }
 
-Vector3f Boid::Cohesion(Flock flock) {
+Vector3f Boid::CohesionRule(std::vector<Boid> flock) {
     Vector3f sum = Vector3f(0, 0, 0);
     int count = 0;
-    for (int i = 0; i < flock.getSize(); i++) {
-        float d = this->position.distanceBetweenVectors(flock.getBoidfromIndex(i).getPosition());
+    for (int i = 0; i < flock.size(); i++) {
+        float d = this->position.distanceBetweenVectors(flock[i].getPosition());
 
         if (d > 0 && d < this->desiredCohesion) {
-            sum.addVectors(flock.getBoidfromIndex(i).getPosition());
+            sum.addVectors(flock[i].getPosition());
             count++;
         }
     }
@@ -91,14 +92,14 @@ Vector3f Boid::Cohesion(Flock flock) {
     }
 }
 
-Vector3f Boid::Alignment(Flock flock) {
+Vector3f Boid::AlignmentRule(std::vector<Boid> flock) {
     Vector3f sum = Vector3f(0, 0, 0);
     int count = 0;
-    for (int i = 0; i < flock.getSize(); i++) {
-        float d = this->position.distanceBetweenVectors(flock.getBoidfromIndex(i).getPosition());
+    for (int i = 0; i < flock.size(); i++) {
+        float d = this->position.distanceBetweenVectors(flock[i].getPosition());
 
         if (d > 0 && d < this->desiredAlignment) {
-            sum.addVectors(flock.getBoidfromIndex(i).getVelocity());
+            sum.addVectors(flock[i].getVelocity());
             count++;
         }
     }

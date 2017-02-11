@@ -2,8 +2,8 @@ COMMON	= ./common
 
 DBG      ?=
 NVCC     ?= nvcc
-CUDA_HOME?= /usr/local/cuda
-NVFLAGS  = -I$(CUDA_HOME)/include --ptxas-options="-v" -gencode=arch=compute_35,code=\"sm_35,compute_35\" -Xcompiler
+CUDA_HOME?= $(TACC_CUDA_DIR)
+NVFLAGS  = -I$(CUDA_HOME)include --ptxas-options="-v" -gencode=arch=compute_35,code=\"sm_35,compute_35\"
 CXXFLAGS = -O3 -I. -I$(COMMON) $(DBG)
 
 EXEC = cuda-boids
@@ -17,7 +17,7 @@ DEPS = $(OBJS:.o=.d)
 
 # Load common make options
 include $(COMMON)/Makefile.common
-LDFLAGS	= $(COMMON_LIBS) -lcudart -L$(CUDA_HOME)/lib64
+LDFLAGS	= $(COMMON_LIBS) -lcudart -L$(CUDA_HOME)lib64
 
 %.o: %.cu
 	$(NVCC) $(CXXFLAGS) $(NVFLAGS) -c $<
@@ -29,10 +29,10 @@ vector3f: vector3f.o
 flock: flock.o
 	$(NVCC) $(CXXFLAGS) -o flock $^ $(LDFLAGS)
 
-boids: boids.o flock.o vector3f.o
-	$(NVCC) $(CXXFLAGS) -o boids $^ $(LDFLAGS)
+boid: boid.o vector3f.o
+	$(NVCC) $(CXXFLAGS) -o boid $^ $(LDFLAGS)
 
-cuda-boids: cuda-boids.o boids.o flock.o vector3f.o $(COMMON_OBJS)
+cuda-boids: cuda-boids.o $(COMMON_OBJS)
 	$(NVCC) $(CXXFLAGS) $(NVFLAGS) -o cuda-boids $^ $(LDFLAGS)
 
 clean: clean_common

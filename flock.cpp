@@ -1,5 +1,5 @@
 
-include "flock.h"
+#include "flock.h"
 
 Flock::Flock() {
     this->boid_amount = 100;

@@ -2,7 +2,8 @@
 #ifndef BOID_H
 #define BOID_H
 
-#include "flock.h"
+#include <vector>
+
 #include "vector3f.h"
 
 class Boid {
@@ -25,15 +26,12 @@ public:
     
  // Physics Functions
  void applyForce(Vector3f force);
+ Vector3f seek(Vector3f sum);
 
  // 3 Laws of Boids
- // Separation
- Vector3f Separation(Flock flock);
- Vector3f seek(Vector3f sum);
- // Cohesion
- Vector3f Cohesion(Flock flock);
- // Alignment
- Vector3f Alignment(Flock flock);
+ Vector3f SeparationRule(std::vector<Boid> flock);
+ Vector3f CohesionRule(std::vector<Boid> flock);
+ Vector3f AlignmentRule(std::vector<Boid> flock);
 
  // Mutator Functions
  void setPosition(Vector3f vector);
