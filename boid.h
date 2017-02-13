@@ -30,7 +30,7 @@ public:
  // Physics Functions
  void applyForce(Vector3f force);
  Vector3f seek(Vector3f sum);
- void update(vector<Boid> flock);
+ void update(std::vector<Boid> flock);
  //void borders();
  //float getCurrentAngle(Vector3f vector);
 

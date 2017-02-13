@@ -14,17 +14,17 @@
 
 static double device_time = 0.0;
 
-__global__ void gpu_boids_kernel(int n, Flock dev_flock) {
-
+__global__ void gpu_boids_kernel(int n, Flock* dev_flock) {
+   //dev_flock.update();
 }
 
 void help() {
    fprintf(stderr,"./boids --help|-h --nboids|-n \n");
 }
 
-__host__ void gpu_boids(int n, flock* h_flock) {
+__host__ void gpu_boids(int n, Flock* h_flock) {
   // Allocate Device Memory
-  flock* dev_flock = NULL;
+  Flock* dev_flock = NULL;
   cudaMalloc(&dev_flock, sizeof(Boid)*n);
   // Create Cuda Events
   cudaEvent_t calc1_event, calc2_event;
@@ -76,7 +76,7 @@ int main (int argc, char* argv[]) {
    }
 
    //  Memory Allocation
-   fprintf(stdout, "Allocating memory for flock.");
+   fprintf(stdout, "Allocating memory for flock.\n");
 
    Flock* flock = NULL;
    Allocate(flock, sizeof(Boid)*n);
@@ -95,13 +95,13 @@ int main (int argc, char* argv[]) {
       fprintf(stderr, "   maxThreadsPerBlock:             %d\n", props.maxThreadsPerBlock);
    }
 
-   double t_gpu = 0, t_host = 0;
-   myTimer_t t_start = getTimeStamp();
+   //double t_gpu = 0, t_host = 0;
+   //myTimer_t t_start = getTimeStamp();
 
-   gpu_boids(flock);
-   fprintf(stdout, device_time);  
+   gpu_boids(n, flock);
+   //fprintf(stdout, device_time);  
    // Memory Deallocation
-   fprintf(stdout, "De-Allocating memory.");
-   Deallocate(flock;);
+   fprintf(stdout, "De-Allocating memory.\n");
+   Deallocate(flock);
    return 0;
 }

@@ -55,7 +55,7 @@ Vector3f Boid::seek(Vector3f sum) {
 
 //void Boid::borders() {}
 
-void Boid::update(vector<Boid> flock) {
+void Boid::update(std::vector<Boid> flock) {
   Vector3f separation = SeparationRule(flock);
   Vector3f alignment = AlignmentRule(flock);
   Vector3f cohesion = CohesionRule(flock);
