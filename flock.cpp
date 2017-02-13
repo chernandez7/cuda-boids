@@ -1,8 +1,8 @@
 
 #include "flock.h"
 
-Flock::Flock() {
-    this->boid_amount = 100;
+Flock::Flock(int amount) {
+    this->boid_amount = amount;
     this->flock = std::vector<Boid>(this->boid_amount);
 }
 
@@ -15,4 +15,3 @@ int Flock::getSize() const {
 Boid Flock::getBoidfromIndex(int i) {
     return flock[i];
 }
-

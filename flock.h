@@ -7,9 +7,9 @@
 
 class Flock {
   public:
-   Flock();
+   Flock(int amount);
    ~Flock();
-   
+
    int boid_amount;
    std::vector<Boid> flock;
 
@@ -18,4 +18,3 @@ class Flock {
 };
 
 #endif
-
