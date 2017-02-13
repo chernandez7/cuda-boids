@@ -12,6 +12,10 @@ Boid::Boid() {
     this->desiredSeparation = 20;
     this->desiredAlignment = 70;
     this->desiredCohesion = 25;
+
+    this->separationWeight = 1.5;
+    this->alignmentWeight = 1.0;
+    this->cohesionWeight = 1.0;
 }
 
 Boid::Boid(Vector3f postition) {
@@ -24,12 +28,54 @@ Boid::Boid(Vector3f postition) {
     this->desiredSeparation = 20;
     this->desiredAlignment = 70;
     this->desiredCohesion = 25;
+
+    this->separationWeight = 1.5;
+    this->alignmentWeight = 1.0;
+    this->cohesionWeight = 1.0;
 }
 
 Boid::~Boid() {}
 
 void Boid::applyForce(Vector3f position) {
     this->acceleration.addVectors(position);
+}
+
+Vector3f Boid::seek(Vector3f sum) {
+    Vector3f desired = Vector3f(0, 0, 0);
+    desired.subVectors(sum);
+    desired.normalize();
+    desired.mulByScalar(this->maxSpeed);
+
+    float deltaX = desired.getX() - this->velocity.getX();
+    float deltaY = desired.getY() - this->velocity.getY();
+    float deltaZ = desired.getZ() - this->velocity.getZ();
+    this->acceleration.setCoords(deltaX, deltaY, deltaZ);
+    return acceleration;
+}
+
+//void Boid::borders() {}
+
+void Boid::update(vector<Boid> flock) {
+  Vector3f separation = SeparationRule(flock);
+  Vector3f alignment = AlignmentRule(flock);
+  Vector3f cohesion = CohesionRule(flock);
+
+  separation.mulByScalar(this->separationWeight);
+  alignment.mulByScalar(this->alignmentWeight);
+  cohesionWeight.mulByScalar(this->cohesionWeight);
+
+  applyForce(separation);
+  applyForce(alignment);
+  applyForce(cohesion);
+
+  this->acceleration.mulByScalar(.35);
+  this->velocity.addVectors(this->acceleration);
+  this->velocity.limitVector(this->maxSpeed);
+  this->position.addVectors(this->velocity);
+
+  this->acceleration.mulByScalar(0);
+
+  //borders();
 }
 
 Vector3f Boid::SeparationRule(std::vector<Boid> flock) {
@@ -57,19 +103,6 @@ Vector3f Boid::SeparationRule(std::vector<Boid> flock) {
    steer.limitVector(this->maxForce);
   }
    return steer;
-}
-
-Vector3f Boid::seek(Vector3f sum) {
-    Vector3f desired = Vector3f(0, 0, 0);
-    desired.subVectors(sum);
-    desired.normalize();
-    desired.mulByScalar(this->maxSpeed);
-
-    float deltaX = desired.getX() - this->velocity.getX();
-    float deltaY = desired.getY() - this->velocity.getY();
-    float deltaZ = desired.getZ() - this->velocity.getZ();
-    this->acceleration.setCoords(deltaX, deltaY, deltaZ);
-    return acceleration;
 }
 
 Vector3f Boid::CohesionRule(std::vector<Boid> flock) {
@@ -108,7 +141,7 @@ Vector3f Boid::AlignmentRule(std::vector<Boid> flock) {
    sum.divByScalar(count);
    sum.normalize();
    sum.mulByScalar(maxSpeed);
-   
+
    Vector3f steer;
    float deltaX = sum.getX() - this->velocity.getX();
    float deltaY = sum.getY() - this->velocity.getY();
@@ -145,4 +178,3 @@ Vector3f Boid::getVelocity() const {
 Vector3f Boid::getAcceleration() const {
     return this->acceleration;
 }
-

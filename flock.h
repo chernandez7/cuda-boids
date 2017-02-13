@@ -15,6 +15,7 @@ class Flock {
 
    Boid getBoidfromIndex(int i);
    int getSize() const;
+   void update();
 };
 
 #endif

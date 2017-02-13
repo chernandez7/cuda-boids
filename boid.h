@@ -16,6 +16,9 @@ public:
  int desiredSeparation;
  int desiredAlignment;
  int desiredCohesion;
+ float separationWeight;
+ float alignmentWeight;
+ float cohesionWeight;
 
  // Constructor
  Boid();
@@ -23,10 +26,13 @@ public:
 
  // Destructor
  ~Boid();
-    
+
  // Physics Functions
  void applyForce(Vector3f force);
  Vector3f seek(Vector3f sum);
+ void update(vector<Boid> flock);
+ //void borders();
+ //float getCurrentAngle(Vector3f vector);
 
  // 3 Laws of Boids
  Vector3f SeparationRule(std::vector<Boid> flock);
@@ -44,4 +50,3 @@ public:
  Vector3f getAcceleration() const;
 };
 #endif
-
