@@ -53,6 +53,10 @@ __host__ void gpu_boids(int n, Flock* h_flock) {
 
 }
 
+void Render() {
+
+}
+
 int main (int argc, char* argv[]) {
    /* Define the number of boids. The default is 1000. */
    int n = 1000;
@@ -102,7 +106,18 @@ int main (int argc, char* argv[]) {
    //myTimer_t t_start = getTimeStamp();
   
 
-  glutInit(&argc, argv);
+   glutInit(&argc, argv);
+   glutInitWindowSize(1024, 720);
+   glutInitWindowPosition(0, 0);
+   glutCreateWindow("TEST");
+   
+   glutDisplayFunc(Render);
+   glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+
+   glutMainLoop();
+
+   glClear(GL_COLOR_BUFFER_BIT);
+   glutSwapBuffers();
 
 
    gpu_boids(n, flock);
