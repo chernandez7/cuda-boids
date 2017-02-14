@@ -3,6 +3,8 @@
 #include <strings.h>
 #include <ctype.h>
 
+#include <GL/glut.h>
+#include <GL/gl.h>
 #include <cuda_runtime.h>
 
 #include <my_timer.h>
@@ -48,6 +50,7 @@ __host__ void gpu_boids(int n, Flock* h_flock) {
   // Destroy event timers
   cudaEventDestroy(calc1_event);
   cudaEventDestroy(calc2_event);
+
 }
 
 int main (int argc, char* argv[]) {
@@ -97,6 +100,10 @@ int main (int argc, char* argv[]) {
 
    //double t_gpu = 0, t_host = 0;
    //myTimer_t t_start = getTimeStamp();
+  
+
+  glutInit(&argc, argv);
+
 
    gpu_boids(n, flock);
    //fprintf(stdout, device_time);  

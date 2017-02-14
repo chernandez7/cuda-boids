@@ -15,6 +15,11 @@ Senior year Independent Study (COMP 398) reworking [original Bird-oids project](
  - Run
 	-`./CUDA-Boids`
 
+### VNC
+ - vncpasswd 
+ - sbatch /share/doc/slurm/job.vnc -t hh:mm:ss -N nodes -geometry resXres
+ - ssh -f -N -L xxxx:stampede.tacc.utexas.edu:yyyy username@stampede.tacc.utexas.edu
+
 ---
 ### License
  - MIT License

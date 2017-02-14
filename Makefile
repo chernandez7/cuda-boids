@@ -17,7 +17,7 @@ DEPS = $(OBJS:.o=.d)
 
 # Load common make options
 include $(COMMON)/Makefile.common
-LDFLAGS	= $(COMMON_LIBS) -lcudart -L$(CUDA_HOME)lib64
+LDFLAGS	= $(COMMON_LIBS) -lcudart -L$(CUDA_HOME)lib64 -lglut -lGLU -lGL
 
 %.o: %.cu
 	$(NVCC) $(CXXFLAGS) $(NVFLAGS) -c $<
