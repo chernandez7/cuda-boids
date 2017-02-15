@@ -185,7 +185,7 @@ __host__ int main (int argc, char* argv[]) {
       }
    }
 
-   //Flock h_flock = NULL;
+   /*Flock h_flock = NULL;
    //Allocate(h_flock, sizeof(Boid)*n);
    Flock h_flock = Flock(n);
    std::vector<Vector3f> h_flockPos;
@@ -195,32 +195,37 @@ __host__ int main (int argc, char* argv[]) {
    }
    fprintf(stdout, "   h_flock size:             %d\n", h_flock.getSize());
    fprintf(stdout, "   h_flockPos size:          %lu\n", h_flockPos.size());
-
-   // Explicitly set device
-   cudaGLSetGLDevice(0);
-   
-   GLuint vbo;
-
-  // Create buffer object and register it with CUDA
-  glGenBuffers(1, &vbo);
-  glBindBuffer(GL_ARRAY_BUFFER, vbo);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(h_flockPos), NULL, GL_DYNAMIC_COPY);
-  cudaGLRegisterBufferObject(vbo);
-/*
-   printDeviceProps();
+   */
+    printDeviceProps();
   
    // OpenGL / GLUT
    GLInit(argc, argv);
    glutReshapeFunc(windowResize);
    glutDisplayFunc(Render);
    glutSpecialFunc(Keyboard);
+
+
+   // Explicitly set device
+   cudaGLSetGLDevice(0);
    
+   GLuint vertexArray;
+
+  // Create buffer object and register it with CUDA
+  glGenBuffers(1, &vertexArray);
+  glBindBuffer(GL_ARRAY_BUFFER, vertexArray);
+  glBufferData(GL_ARRAY_BUFFER, n*16, NULL, GL_DYNAMIC_DRAW);
+  // Unbind Buffer
+  glBindBuffer(GL_ARRAY_BUFFER, 0);
+  // Register VBO
+  cudaGLRegisterBufferObject(vertexArray);
+
+    
    glutMainLoop();
    
    // Due to GL/GLUT, program exits as windows closes
    // So this code can't be reached without FreeGLUT.
    onGLUTExit();
-*/
+
   return 0;
 }
 
