@@ -11,7 +11,6 @@
 #endif
 #include <cuda_runtime.h>
 
-//#include <my_timer.h>
 #include <aligned_allocator.h>
 
 #include "boid.h"
@@ -21,16 +20,18 @@
 static double device_time = 0.0;
 double rX = 0.0;
 double rY = 0.0;
+int n = 0;
+Flock h_flock = Flock();
 
 __global__ void gpu_boids_kernel(int n, Flock* dev_flock) {
-   //dev_flock.update();
+   
 }
 
-void help() {
+__host__ void help() {
    fprintf(stderr,"./boids --help|-h --nboids|-n \n");
 }
 
-__host__ void gpu_boids(int n, Flock* h_flock) {
+__host__ void gpu_boids() {
   // Allocate Device Memory
   Flock* dev_flock = NULL;
   cudaMalloc(&dev_flock, sizeof(Boid)*n);
@@ -59,7 +60,7 @@ __host__ void gpu_boids(int n, Flock* h_flock) {
 
 }
 
-void drawBoid() {
+__host__ void drawBoid() {
   glClearColor(0.4, 0.4, 0.4, 0.4);
   glClear(GL_COLOR_BUFFER_BIT);
   glColor3f(1.0, 1.0, 1.0);
@@ -75,7 +76,7 @@ void drawBoid() {
   glutSwapBuffers();
 }
 
-void Render() {
+__host__ void Render() {
   // Set Background Color
   glClearColor(0.4, 0.4, 0.4, 1.0);
   // Clear screen
@@ -89,9 +90,11 @@ void Render() {
   glRotatef(rY, 0.0, 1.0, 0.0);
 
   drawBoid();
+
+  h_flock.update();
 }
 
-void Keyboard(int key, int x, int y) {
+__host__ void Keyboard(int key, int x, int y) {
   if (key == GLUT_KEY_RIGHT) {
     rY += 15;
   } else if (key == GLUT_KEY_LEFT) {
@@ -106,25 +109,56 @@ void Keyboard(int key, int x, int y) {
   glutPostRedisplay();		  
 }
 
-void GLInit(int argc, char* argv[]) {
+__host__ void GLInit(int argc, char* argv[]) {
+  // Create Window
   glutInit(&argc, argv);
   glutInitDisplayMode( GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH );
   glutInitWindowSize(700, 700);
   glutInitWindowPosition(20, 20);
   glutCreateWindow("cuda-boids");
+
+  // Allow Depth and Colors
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_COLOR_MATERIAL);
+
+  // Set the color of the background
+  glClearColor(0.7f, 0.8f, 1.0f, 1.0f);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_NORMALIZE);
 }
 
 // Called when OpenGL Window is resized to handle scaling
-void windowResize(int height, int width) {
+__host__ void windowResize(int height, int width) {
   glViewport(0, 0, width, height);
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
   gluPerspective(45.0, (double)width / (double)height, 1.0, 200.0);
 }
 
-int main (int argc, char* argv[]) {
-   /* Define the number of boids. The default is 1000. */
-   int n = 1000;
+__host__ void printDeviceProps() {
+   {
+      cudaDeviceProp props;
+      cudaGetDeviceProperties( &props, 0 );
+      fprintf(stderr, "   name:                           %s\n", props.name);
+      fprintf(stderr, "   major.minor:                    %d.%d\n", props.major, props.minor);
+      fprintf(stderr, "   totalGlobalMem:                 %lu (MB)\n", props.totalGlobalMem / (1024*1024));
+      fprintf(stderr, "   sharedMemPerBlock:              %lu (KB)\n", props.sharedMemPerBlock / 1024);
+      fprintf(stderr, "   sharedMemPerMultiprocessor:     %lu (KB)\n", props.sharedMemPerMultiprocessor / 1024);
+      fprintf(stderr, "   regsPerBlock:                   %d\n", props.regsPerBlock);
+      fprintf(stderr, "   warpSize:                       %d\n", props.warpSize);
+      fprintf(stderr, "   multiProcessorCount:            %d\n", props.multiProcessorCount);
+      fprintf(stderr, "   maxThreadsPerBlock:             %d\n", props.maxThreadsPerBlock);
+   }
+}
+
+// De-allocation of Memory after GLUT stops
+void onGLUTExit() {
+   fprintf(stdout, "De-Allocating memory.\n");
+   //Deallocate(h_flock);
+}
+
+__host__ int main (int argc, char* argv[]) {
 
    for (int i = 1; i < argc; ++i) {
 #define check_index(i,str) \
@@ -148,27 +182,16 @@ int main (int argc, char* argv[]) {
    }
 
    //  Memory Allocation
-   fprintf(stdout, "Allocating memory for flock.\n");
+   fprintf(stdout, "   Allocating memory for:          %d bird-oids.\n", n);
 
-   Flock* flock = NULL;
-   Allocate(flock, sizeof(Boid)*n);
-
-   {
-      cudaDeviceProp props;
-      cudaGetDeviceProperties( &props, 0 );
-      fprintf(stderr, "   name:                           %s\n", props.name);
-      fprintf(stderr, "   major.minor:                    %d.%d\n", props.major, props.minor);
-      fprintf(stderr, "   totalGlobalMem:                 %lu (MB)\n", props.totalGlobalMem / (1024*1024));
-      fprintf(stderr, "   sharedMemPerBlock:              %lu (KB)\n", props.sharedMemPerBlock / 1024);
-      fprintf(stderr, "   sharedMemPerMultiprocessor:     %lu (KB)\n", props.sharedMemPerMultiprocessor / 1024);
-      fprintf(stderr, "   regsPerBlock:                   %d\n", props.regsPerBlock);
-      fprintf(stderr, "   warpSize:                       %d\n", props.warpSize);
-      fprintf(stderr, "   multiProcessorCount:            %d\n", props.multiProcessorCount);
-      fprintf(stderr, "   maxThreadsPerBlock:             %d\n", props.maxThreadsPerBlock);
+   //h_flock = NULL;
+   //Allocate(h_flock, sizeof(Boid)*n);
+   for (int j = 0; j < n; j++) {
+      Boid temp = Boid();
+      h_flock.addBoid(temp);
    }
 
-   //double t_gpu = 0, t_host = 0;
-   //myTimer_t t_start = getTimeStamp();
+   printDeviceProps();
   
    // OpenGL / GLUT
    GLInit(argc, argv);
@@ -177,12 +200,11 @@ int main (int argc, char* argv[]) {
    glutSpecialFunc(Keyboard);
 
    glutMainLoop();
+   
+   // Due to GL/GLUT, program exits as windows closes
+   // So this code can't be reached without FreeGLUT.
+   onGLUTExit();
 
-   gpu_boids(n, flock);
-   //fprintf(stdout, device_time);  
-   // Memory Deallocation
-   fprintf(stdout, "De-Allocating memory.\n");
-   Deallocate(flock);
-   return 0;
+  return 0;
 }
 

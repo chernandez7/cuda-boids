@@ -7,14 +7,15 @@
 
 class Flock {
   public:
+   Flock();
    Flock(int amount);
    ~Flock();
 
    int boid_amount;
    std::vector<Boid> flock;
 
-   Boid getBoidfromIndex(int i);
    int getSize() const;
+   void addBoid(Boid boid);
    void update();
 };
 
