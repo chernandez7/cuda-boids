@@ -8,12 +8,16 @@ Flock::Flock() {
 
 Flock::Flock(int amount) {
     this->boid_amount = amount;
-    this->flock = std::vector<Boid>(this->boid_amount);
+
+    for (int i = 0; i < amount; i++ ){
+      Boid temp = Boid();
+      this->flock.push_back(temp);
+    }
 }
 
 Flock::~Flock() {}
 
-int Flock::getSize() const {
+int Flock::getSize() {
     return boid_amount;
 }
 
@@ -28,5 +32,9 @@ void Flock::update() {
 void Flock::addBoid(Boid boid) {
    this->flock.push_back(boid);
    this->boid_amount++;
+}
+
+Boid Flock::getBoidFromIndex(int index) {
+   return this->flock[index];
 }
 

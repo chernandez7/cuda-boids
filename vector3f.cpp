@@ -16,7 +16,7 @@ Vector3f::Vector3f(float x, float y, float z) {
 Vector3f::~Vector3f() {}
 
 // Distance Formula
-  float Vector3f::distanceBetweenVectors(Vector3f vector) const {
+  float Vector3f::distanceBetweenVectors(Vector3f vector) {
   float dx = this->x - vector.x;
   float dy = this->y - vector.y;
   float dz = this->z - vector.z;
@@ -37,7 +37,7 @@ void Vector3f::subVectors(Vector3f vector) {
     this->z -= vector.z;
 }
 
-Vector3f Vector3f::diffVectors(Vector3f vector) const {
+Vector3f Vector3f::diffVectors(Vector3f vector) {
     Vector3f delta = Vector3f(
         this->x - vector.x,
         this->y - vector.y,
@@ -76,7 +76,7 @@ void Vector3f::setCoords(float x, float y, float z) {
     this->z = z;
 }
 
-float Vector3f::calcMagnitude() const {
+float Vector3f::calcMagnitude() {
     return sqrt(
         this->x * this->x +
         this->y * this->y +

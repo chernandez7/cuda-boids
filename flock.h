@@ -1,9 +1,9 @@
 
-#include <vector>
-#include "boid.h"
-
 #ifndef FLOCK_H
 #define FLOCK_H
+
+#include <vector>
+#include "boid.h"
 
 class Flock {
   public:
@@ -14,9 +14,10 @@ class Flock {
    int boid_amount;
    std::vector<Boid> flock;
 
-   int getSize() const;
+   int getSize();
    void addBoid(Boid boid);
    void update();
+   Boid getBoidFromIndex(int index);
 };
 
 #endif

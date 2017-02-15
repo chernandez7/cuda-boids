@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <strings.h>
 #include <ctype.h>
+#include <vector>
 #ifdef __APPLE__
 #include <OpenGL/gl.h>
 #include <GLUT/glut.h>
@@ -9,7 +10,9 @@
 #include <GL/glut.h>
 #include <GL/gl.h>
 #endif
+
 #include <cuda_runtime.h>
+#include <cuda_gl_interop.h>
 
 #include <aligned_allocator.h>
 
@@ -21,7 +24,7 @@ static double device_time = 0.0;
 double rX = 0.0;
 double rY = 0.0;
 int n = 0;
-Flock h_flock = Flock();
+//Flock h_flock = Flock();
 
 __global__ void gpu_boids_kernel(int n, Flock* dev_flock) {
    
@@ -31,7 +34,7 @@ __host__ void help() {
    fprintf(stderr,"./boids --help|-h --nboids|-n \n");
 }
 
-__host__ void gpu_boids() {
+__host__ void gpu_boids(Flock* h_flock) {
   // Allocate Device Memory
   Flock* dev_flock = NULL;
   cudaMalloc(&dev_flock, sizeof(Boid)*n);
@@ -91,7 +94,7 @@ __host__ void Render() {
 
   drawBoid();
 
-  h_flock.update();
+  //h_flock.update();
 }
 
 __host__ void Keyboard(int key, int x, int y) {
@@ -110,6 +113,7 @@ __host__ void Keyboard(int key, int x, int y) {
 }
 
 __host__ void GLInit(int argc, char* argv[]) {
+
   // Create Window
   glutInit(&argc, argv);
   glutInitDisplayMode( GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH );
@@ -181,16 +185,28 @@ __host__ int main (int argc, char* argv[]) {
       }
    }
 
-   //  Memory Allocation
-   fprintf(stdout, "   Allocating memory for:          %d bird-oids.\n", n);
-
-   //h_flock = NULL;
+   //Flock h_flock = NULL;
    //Allocate(h_flock, sizeof(Boid)*n);
+   Flock h_flock = Flock(n);
+   std::vector<Vector3f> h_flockPos;
    for (int j = 0; j < n; j++) {
-      Boid temp = Boid();
-      h_flock.addBoid(temp);
+      h_flockPos.push_back(h_flock.getBoidFromIndex(j).getPosition());
+      fprintf(stdout, "   added boid and pos:       %d\n", j);
    }
+   fprintf(stdout, "   h_flock size:             %d\n", h_flock.getSize());
+   fprintf(stdout, "   h_flockPos size:          %lu\n", h_flockPos.size());
 
+   // Explicitly set device
+   cudaGLSetGLDevice(0);
+   
+   GLuint vbo;
+
+  // Create buffer object and register it with CUDA
+  glGenBuffers(1, &vbo);
+  glBindBuffer(GL_ARRAY_BUFFER, vbo);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(h_flockPos), NULL, GL_DYNAMIC_COPY);
+  cudaGLRegisterBufferObject(vbo);
+/*
    printDeviceProps();
   
    // OpenGL / GLUT
@@ -198,13 +214,13 @@ __host__ int main (int argc, char* argv[]) {
    glutReshapeFunc(windowResize);
    glutDisplayFunc(Render);
    glutSpecialFunc(Keyboard);
-
+   
    glutMainLoop();
    
    // Due to GL/GLUT, program exits as windows closes
    // So this code can't be reached without FreeGLUT.
    onGLUTExit();
-
+*/
   return 0;
 }
 

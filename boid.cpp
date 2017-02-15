@@ -62,7 +62,7 @@ void Boid::update(std::vector<Boid> flock) {
 
   separation.mulByScalar(this->separationWeight);
   alignment.mulByScalar(this->alignmentWeight);
-  cohesionWeight.mulByScalar(this->cohesionWeight);
+  cohesion.mulByScalar(this->cohesionWeight);
 
   applyForce(separation);
   applyForce(alignment);
@@ -167,14 +167,14 @@ void Boid::setAcceleration(Vector3f vector) {
     this->acceleration = vector;
 }
 
-Vector3f Boid::getPosition() const {
+Vector3f Boid::getPosition() {
     return this->position;
 }
 
-Vector3f Boid::getVelocity() const {
+Vector3f Boid::getVelocity() {
     return this->velocity;
 }
 
-Vector3f Boid::getAcceleration() const {
+Vector3f Boid::getAcceleration() {
     return this->acceleration;
 }

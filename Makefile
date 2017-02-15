@@ -27,13 +27,13 @@ LDFLAGS	= $(COMMON_LIBS) -lcudart -Xlinker -framework,OpenGL,-framework,GLUT #-L
 vector3f: vector3f.o
 	$(NVCC) $(CXXFLAGS) -o vector3f $^ $(LDFLAGS)
 
-flock: flock.o
+flock: flock.o boid.o
 	$(NVCC) $(CXXFLAGS) -o flock $^ $(LDFLAGS)
 
 boid: boid.o vector3f.o
 	$(NVCC) $(CXXFLAGS) -o boid $^ $(LDFLAGS)
 
-cuda-boids: cuda-boids.o $(COMMON_OBJS)
+cuda-boids: cuda-boids.o boid.o vector3f.o flock.o $(COMMON_OBJS)
 	$(NVCC) $(CXXFLAGS) $(NVFLAGS) -o cuda-boids $^ $(LDFLAGS)
 
 clean: clean_common

@@ -13,10 +13,10 @@ class Vector3f {
     float z;
 
     // Vector Math Functions
-    float distanceBetweenVectors(Vector3f vector) const;
+    float distanceBetweenVectors(Vector3f vector);
     void addVectors(Vector3f vector);
     void subVectors(Vector3f vector);
-    Vector3f diffVectors(Vector3f vector) const;
+    Vector3f diffVectors(Vector3f vector);
   
     void mulByScalar(float scalar);
     void divByScalar(float scalar);
@@ -28,7 +28,7 @@ class Vector3f {
     float getZ() const;
   
     void limitVector(float force);
-    float calcMagnitude() const;
+    float calcMagnitude();
     void normalize();
 };
 

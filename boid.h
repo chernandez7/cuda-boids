@@ -3,7 +3,6 @@
 #define BOID_H
 
 #include <vector>
-
 #include "vector3f.h"
 
 class Boid {
@@ -45,8 +44,8 @@ public:
  void setAcceleration(Vector3f vector);
 
  // Accessor Functions
- Vector3f getPosition() const;
- Vector3f getVelocity() const;
- Vector3f getAcceleration() const;
+ Vector3f getPosition();
+ Vector3f getVelocity();
+ Vector3f getAcceleration();
 };
 #endif
