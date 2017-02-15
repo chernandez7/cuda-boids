@@ -2,7 +2,8 @@ COMMON	= ./common
 
 DBG      ?=
 NVCC     ?= nvcc
-CUDA_HOME?= $(TACC_CUDA_DIR)
+#CUDA_HOME?= $(TACC_CUDA_DIR)
+CUDA_HOME?= /Developer/NVIDIA/CUDA-7.5/bin/
 NVFLAGS  = -I$(CUDA_HOME)include --ptxas-options="-v" -gencode=arch=compute_35,code=\"sm_35,compute_35\"
 CXXFLAGS = -O3 -I. -I$(COMMON) $(DBG)
 
@@ -17,7 +18,7 @@ DEPS = $(OBJS:.o=.d)
 
 # Load common make options
 include $(COMMON)/Makefile.common
-LDFLAGS	= $(COMMON_LIBS) -lcudart -L$(CUDA_HOME)lib64 -lglut -lGLU -lGL
+LDFLAGS	= $(COMMON_LIBS) -lcudart -Xlinker -framework,OpenGL,-framework,GLUT #-L$(CUDA_HOME)lib64 -lglut -lGLU -lGL
 
 %.o: %.cu
 	$(NVCC) $(CXXFLAGS) $(NVFLAGS) -c $<

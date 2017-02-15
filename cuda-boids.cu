@@ -2,12 +2,16 @@
 #include <stdlib.h>
 #include <strings.h>
 #include <ctype.h>
-
+#ifdef __APPLE__
+#include <OpenGL/gl.h>
+#include <GLUT/glut.h>
+#else
 #include <GL/glut.h>
 #include <GL/gl.h>
+#endif
 #include <cuda_runtime.h>
 
-#include <my_timer.h>
+//#include <my_timer.h>
 #include <aligned_allocator.h>
 
 #include "boid.h"
@@ -15,6 +19,8 @@
 #include "vector3f.h"
 
 static double device_time = 0.0;
+double rX = 0.0;
+double rY = 0.0;
 
 __global__ void gpu_boids_kernel(int n, Flock* dev_flock) {
    //dev_flock.update();
@@ -53,8 +59,67 @@ __host__ void gpu_boids(int n, Flock* h_flock) {
 
 }
 
-void Render() {
+void drawBoid() {
+  glClearColor(0.4, 0.4, 0.4, 0.4);
+  glClear(GL_COLOR_BUFFER_BIT);
+  glColor3f(1.0, 1.0, 1.0);
+  glOrtho(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0);
 
+  glBegin(GL_TRIANGLES);
+    glVertex3f(-0.7, 0.7, 0);
+    glVertex3f(0.7, 0.7, 0);
+    glVertex3f(0, -1, 0);
+  glEnd();
+
+  glFlush();
+  glutSwapBuffers();
+}
+
+void Render() {
+  // Set Background Color
+  glClearColor(0.4, 0.4, 0.4, 1.0);
+  // Clear screen
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  // Reset transformations
+  glLoadIdentity();
+  
+  // Perspective modifications
+  glRotatef(rX, 1.0, 0.0, 0.0);
+  glRotatef(rY, 0.0, 1.0, 0.0);
+
+  drawBoid();
+}
+
+void Keyboard(int key, int x, int y) {
+  if (key == GLUT_KEY_RIGHT) {
+    rY += 15;
+  } else if (key == GLUT_KEY_LEFT) {
+    rY -= 15;
+  } else if (key == GLUT_KEY_DOWN) {
+    rX -= 15;
+  } else if (key == GLUT_KEY_UP) {
+    rX += 15;
+  }
+
+  // Request display update
+  glutPostRedisplay();		  
+}
+
+void GLInit(int argc, char* argv[]) {
+  glutInit(&argc, argv);
+  glutInitDisplayMode( GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH );
+  glutInitWindowSize(700, 700);
+  glutInitWindowPosition(20, 20);
+  glutCreateWindow("cuda-boids");
+}
+
+// Called when OpenGL Window is resized to handle scaling
+void windowResize(int height, int width) {
+  glViewport(0, 0, width, height);
+  glMatrixMode(GL_PROJECTION);
+  glLoadIdentity();
+  gluPerspective(45.0, (double)width / (double)height, 1.0, 200.0);
 }
 
 int main (int argc, char* argv[]) {
@@ -93,9 +158,9 @@ int main (int argc, char* argv[]) {
       cudaGetDeviceProperties( &props, 0 );
       fprintf(stderr, "   name:                           %s\n", props.name);
       fprintf(stderr, "   major.minor:                    %d.%d\n", props.major, props.minor);
-      fprintf(stderr, "   totalGlobalMem:                 %d (MB)\n", props.totalGlobalMem / (1024*1024));
-      fprintf(stderr, "   sharedMemPerBlock:              %d (KB)\n", props.sharedMemPerBlock / 1024);
-      fprintf(stderr, "   sharedMemPerMultiprocessor:     %d (KB)\n", props.sharedMemPerMultiprocessor / 1024);
+      fprintf(stderr, "   totalGlobalMem:                 %lu (MB)\n", props.totalGlobalMem / (1024*1024));
+      fprintf(stderr, "   sharedMemPerBlock:              %lu (KB)\n", props.sharedMemPerBlock / 1024);
+      fprintf(stderr, "   sharedMemPerMultiprocessor:     %lu (KB)\n", props.sharedMemPerMultiprocessor / 1024);
       fprintf(stderr, "   regsPerBlock:                   %d\n", props.regsPerBlock);
       fprintf(stderr, "   warpSize:                       %d\n", props.warpSize);
       fprintf(stderr, "   multiProcessorCount:            %d\n", props.multiProcessorCount);
@@ -105,20 +170,13 @@ int main (int argc, char* argv[]) {
    //double t_gpu = 0, t_host = 0;
    //myTimer_t t_start = getTimeStamp();
   
-
-   glutInit(&argc, argv);
-   glutInitWindowSize(1024, 720);
-   glutInitWindowPosition(0, 0);
-   glutCreateWindow("TEST");
-   
+   // OpenGL / GLUT
+   GLInit(argc, argv);
+   glutReshapeFunc(windowResize);
    glutDisplayFunc(Render);
-   glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+   glutSpecialFunc(Keyboard);
 
    glutMainLoop();
-
-   glClear(GL_COLOR_BUFFER_BIT);
-   glutSwapBuffers();
-
 
    gpu_boids(n, flock);
    //fprintf(stdout, device_time);  
@@ -127,3 +185,4 @@ int main (int argc, char* argv[]) {
    Deallocate(flock);
    return 0;
 }
+
