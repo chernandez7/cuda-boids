@@ -24,12 +24,12 @@
 
 double rX = 0.0;
 double rY = 0.0;
-float time = 0.0;
+float sim_time = 0.0;
 int n = 0;
 int window_width = 1000;
-wint window_height = 1000;
+int window_height = 1000;
 int mesh_width = 500;
-int msh_height = 500;
+int mesh_height = 500;
 GLuint positionsVBO;
 struct cudaGraphicsResource* positionsVBO_CUDA;
 
@@ -46,19 +46,19 @@ __global__ void kernel(float4* positions, unsigned int mesh_width, unsigned int 
    float w = sinf(u * freq + time)
 	   * cosf(v * freq + time) * 0.5f;
 
-   positions[y * width + x] = make_float4(u, w, v, 1.0f);
+   positions[y * mesh_width + x] = make_float4(u, w, v, 1.0f);
 }
 
 __host__ void help() {
    fprintf(stderr,"./boids --help|-h --nboids|-n \n");
 }
 
-__host__ void launchKernel(float4* positions, unsigned int mesh_width, unsigned int mesh_height, float time) {
+__host__ void launchKernel(float4* positions, unsigned int width, unsigned int height, float t) {
   dim3 dimBlock(16, 16, 1);
   dim3 dimGrid(width / dimBlock.x, height / dimBlock.y, 1);
-  fprintf(stdout, "   Entering Kernel.\n");
-  kernel<<<dimGrid, dimBlock>>>(positions, width, height, time);
-  fprintf(stdout, "   Exited Kernel.\n");
+  //fprintf(stdout, "   Entering Kernel.\n");
+  kernel<<<dimGrid, dimBlock>>>(positions, width, height, t);
+  //fprintf(stdout, "   Exited Kernel.\n");
 }
 
 __host__ void drawBoid() {
@@ -77,32 +77,49 @@ __host__ void drawBoid() {
   glutSwapBuffers();
 }
 
+__host__ void runCUDA(struct cudaGraphicsResource** vbo_resource) {
+  // Map VBO to GL with CUDA
+  float4* positions;
+  checkCudaErrors( cudaGraphicsMapResources(1, vbo_resource, 0) );
+  size_t num_bytes;
+  checkCudaErrors( cudaGraphicsResourceGetMappedPointer((void ** )&positions,
+		  &num_bytes,
+		  *vbo_resource) );
+
+  launchKernel(positions, mesh_width, mesh_height, sim_time); 
+  // Unmap Buffer
+  checkCudaErrors( cudaGraphicsUnmapResources(1, vbo_resource, 0) );
+}
+
 __host__ void Render() {
   
+  // Launch Kernel
+  runCUDA(&positionsVBO_CUDA);
+
   // Clear screen
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   
+  // Set View Matrix
   glMatrixMode(GL_MODELVIEW);
   glLoadIdentity();
 
   // Perspective modifications
   glRotatef(rX, 1.0, 0.0, 0.0);
   glRotatef(rY, 0.0, 1.0, 0.0);
-  
-  glClearColor(0.0, 0.0, 0.0, 0.0);
-  glClear(GL_COLOR_BUFFER_BIT);
-  glColor3f(1.0, 0.0, 0.0);
-  glOrtho(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0);
 
+  // Render from VBO
   glBindBuffer(GL_ARRAY_BUFFER, positionsVBO);
   glVertexPointer(4, GL_FLOAT, 0, 0);
   glEnableClientState(GL_VERTEX_ARRAY);
-  glDrawArrays(GL_POINTS, 0, width * height); // Where the magic happens
+  glColor3f(0.0f, 1.0f, 0.0f);
+  glDrawArrays(GL_POINTS, 0, mesh_width * mesh_height); // Where the magic happens
   glDisableClientState(GL_VERTEX_ARRAY);
   
   // Switch Buffers
   glutSwapBuffers();
-  glutPostRedisplay();
+
+  // Increment Time
+  sim_time += 0.5f;
 }
 
 __host__ void Keyboard(int key, int x, int y) {
@@ -118,6 +135,14 @@ __host__ void Keyboard(int key, int x, int y) {
 
   // Request display update
   glutPostRedisplay();		  
+}
+
+// Called when OpenGL Window is resized to handle scaling
+__host__ void windowResize(int height, int width) {
+  glViewport(0, 0, width, height);
+  glMatrixMode(GL_PROJECTION);
+  glLoadIdentity();
+  gluPerspective(45.0, (double)width / (double)height, 1.0, 200.0);
 }
 
 __host__ void GLInit(int argc, char* argv[]) {
@@ -143,15 +168,7 @@ __host__ void GLInit(int argc, char* argv[]) {
   glViewport(0, 0, window_width, window_height);
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
-  gluPerspective(45.0, (double)width / (double)height, 1.0, 200.0);
-}
-
-// Called when OpenGL Window is resized to handle scaling
-__host__ void windowResize(int height, int width) {
-  glViewport(0, 0, width, height);
-  glMatrixMode(GL_PROJECTION);
-  glLoadIdentity();
-  gluPerspective(45.0, (double)width / (double)height, 1.0, 200.0);
+  gluPerspective(45.0, (double)mesh_width / (double)mesh_height, 1.0, 200.0);
 }
 
 __host__ void printDeviceProps() {
@@ -171,12 +188,12 @@ __host__ void printDeviceProps() {
 }
 
 // De-allocation of Memory after GLUT stops
-void onGLUTExit() {
+__host__ void onGLUTExit() {
    fprintf(stdout, "De-Allocating memory.\n");
    //Deallocate(h_flock);
 }
 
-void createVBO(GLuint *vbo, struct cudaGraphicsResource **vbo_res, unsigned int vbo_res_flags) {
+__host__ void createVBO(GLuint *vbo, struct cudaGraphicsResource **vbo_res, unsigned int vbo_res_flags) {
   
   // Create buffer object and register it with CUDA
   glGenBuffers(1, vbo);
@@ -191,26 +208,12 @@ void createVBO(GLuint *vbo, struct cudaGraphicsResource **vbo_res, unsigned int 
   checkCudaErrors( cudaGraphicsGLRegisterBuffer(vbo_res, *vbo, vbo_res_flags) );
 }
 
-void deleteVBO(GLuint *vbo, struct cudaGraphicsResource *vbo_res) {
+__host__ void deleteVBO(GLuint *vbo, struct cudaGraphicsResource *vbo_res) {
   // Unregister with CUDA
   checkCudaErrors( cudaGraphicsUnregisterResource(vbo_res) );
 
   glBindBuffer(1, *vbo);
   glDeleteBuffers(1, vbo);
-}
-
-void runCUDA(struct cudaGraphicsResource ** vbo_resource) {
-  // Map VBO to GL with CUDA
-  float4* positions;
-  checkCudaErrors( cudaGraphicsMapResources(1, vbo_resource, 0) );
-  size_t num_bytes;
-  checkCudaErrors( cudaGraphicsResourceGetMappedPointer((void ** )&positions,
-		  &num_bytes,
-		  vbo_resource) );
-
-  launchKernel(positions, mesh_width, mesh_height, time); 
-  // Unmap Buffer
-  checkCudaErrors( cudaGraphicsUnmapResources(1, vbo_resource, 0) );
 }
 
 __host__ int main (int argc, char* argv[]) {
@@ -243,10 +246,10 @@ __host__ int main (int argc, char* argv[]) {
    GLInit(argc, argv);
    
    // Create VBO
-   createVBO(&positionsVBO, positionsVBO_CUDA, cudaGraphicsMapFlagsWriteDiscard);
+   createVBO(&positionsVBO, &positionsVBO_CUDA, cudaGraphicsMapFlagsWriteDiscard);
 
    // Run initial CUDA step
-   checkCudaErrors( cudaGLSetGLDevice(0) );
+   cudaGLSetGLDevice(0);
    runCUDA(&positionsVBO_CUDA); 
    
    // Start GLUT Loop

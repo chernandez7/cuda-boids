@@ -3,8 +3,8 @@ COMMON	= ./common
 DBG      ?=
 NVCC     ?= nvcc
 #CUDA_HOME?= $(TACC_CUDA_DIR)
-CUDA_HOME?= /Developer/NVIDIA/CUDA-7.5/bin/
-NVFLAGS  = -I$(CUDA_HOME)include --ptxas-options="-v" -gencode=arch=compute_35,code=\"sm_35,compute_35\"
+CUDA_HOME?= /Developer/NVIDIA/CUDA-8.0/
+NVFLAGS  = -I$(CUDA_HOME)include -I$(CUDA_HOME)samples/common/inc --ptxas-options="-v" -gencode=arch=compute_35,code=\"sm_35,compute_35\"
 CXXFLAGS = -O3 -I. -I$(COMMON) $(DBG)
 
 EXEC = cuda-boids
