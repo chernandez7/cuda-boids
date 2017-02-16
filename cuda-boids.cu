@@ -1,7 +1,9 @@
+// C HEADERS
 #include <stdio.h>
 #include <stdlib.h>
 #include <strings.h>
 #include <ctype.h>
+#include <assert.h>
 #include <vector>
 #ifdef __APPLE__
 #include <OpenGL/gl.h>
@@ -10,43 +12,46 @@
 #include <GL/glut.h>
 #include <GL/gl.h>
 #endif
-
+// CUDA
 #include <cuda_runtime.h>
 #include <cuda_gl_interop.h>
 #include <helper_cuda.h>
-#include <helper_cuda_gl.h> 
-
+#include <helper_cuda_gl.h>
+// COMMON
 #include <aligned_allocator.h>
-
+// Headers
 #include "boid.h"
 #include "flock.h"
 #include "vector3f.h"
 
+// Simulation Variables
 double rX = 0.0;
 double rY = 0.0;
 float sim_time = 0.0;
 int n = 0;
-int window_width = 1000;
-int window_height = 1000;
-int mesh_width = 500;
-int mesh_height = 500;
+// Constants
+const unsigned int window_width = 512;
+const unsigned int window_height = 512;
+const unsigned int mesh_width = 256;
+const unsigned int mesh_height = 256;
+//VBO
 GLuint positionsVBO;
 struct cudaGraphicsResource* positionsVBO_CUDA;
 
-__global__ void kernel(float4* positions, unsigned int mesh_width, unsigned int mesh_height, float time) {
+__global__ void kernel(float4* positions, unsigned int width, unsigned int height, float t) {
    unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
    unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
 
-   float u = x / (float)mesh_width;
-   float v = y / (float)mesh_height;
+   float u = x / (float)width;
+   float v = y / (float)height;
    u = u * 2.0f - 1.0f;
    v = v * 2.0f - 1.0f;
 
    float freq = 4.0f;
-   float w = sinf(u * freq + time)
-	   * cosf(v * freq + time) * 0.5f;
+   float w = sinf(u * freq + t)
+	   * cosf(v * freq + t) * 0.5f;
 
-   positions[y * mesh_width + x] = make_float4(u, w, v, 1.0f);
+   positions[y * width + x] = make_float4(u, w, v, 1.0f);
 }
 
 __host__ void help() {
@@ -56,28 +61,13 @@ __host__ void help() {
 __host__ void launchKernel(float4* positions, unsigned int width, unsigned int height, float t) {
   dim3 dimBlock(16, 16, 1);
   dim3 dimGrid(width / dimBlock.x, height / dimBlock.y, 1);
-  //fprintf(stdout, "   Entering Kernel.\n");
+  fprintf(stdout, "   launching kernel\n");
   kernel<<<dimGrid, dimBlock>>>(positions, width, height, t);
-  //fprintf(stdout, "   Exited Kernel.\n");
-}
-
-__host__ void drawBoid() {
-  glClearColor(0.4, 0.4, 0.4, 0.4);
-  glClear(GL_COLOR_BUFFER_BIT);
-  glColor3f(1.0, 1.0, 1.0);
-  glOrtho(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0);
-
-  glBegin(GL_TRIANGLES);
-    glVertex3f(-0.7, 0.7, 0);
-    glVertex3f(0.7, 0.7, 0);
-    glVertex3f(0, -1, 0);
-  glEnd();
-
-  glFlush();
-  glutSwapBuffers();
+  fprintf(stdout, "   exiting kernel\n");
 }
 
 __host__ void runCUDA(struct cudaGraphicsResource** vbo_resource) {
+  fprintf(stdout, "   running cuda\n");
   // Map VBO to GL with CUDA
   float4* positions;
   checkCudaErrors( cudaGraphicsMapResources(1, vbo_resource, 0) );
@@ -86,19 +76,48 @@ __host__ void runCUDA(struct cudaGraphicsResource** vbo_resource) {
 		  &num_bytes,
 		  *vbo_resource) );
 
-  launchKernel(positions, mesh_width, mesh_height, sim_time); 
+  launchKernel(positions, mesh_width, mesh_height, sim_time);
   // Unmap Buffer
+  fprintf(stdout, "   unmapping buffer\n");
   checkCudaErrors( cudaGraphicsUnmapResources(1, vbo_resource, 0) );
+  fprintf(stdout, "     x:%f  y:%f  z:%f w:%f\n", &positions[10].x, &positions[10].y, &positions[10].z, &positions[10].w);
+}
+
+__host__ void createVBO(GLuint *vbo, struct cudaGraphicsResource **vbo_res, unsigned int vbo_res_flags) {
+  fprintf(stdout, "   creating vbo\n");
+  assert(vbo);
+  // Create buffer object and register it with CUDA
+  glGenBuffers(1, vbo);
+  glBindBuffer(GL_ARRAY_BUFFER, *vbo);
+  unsigned int size = mesh_width * mesh_height * 4 * sizeof(float);
+  glBufferData(GL_ARRAY_BUFFER, size, 0, GL_DYNAMIC_DRAW);
+
+  // Unbind Buffer
+  glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+  // Register VBO
+  checkCudaErrors( cudaGraphicsGLRegisterBuffer(vbo_res, *vbo, vbo_res_flags) );
+}
+
+__host__ void deleteVBO(GLuint *vbo, struct cudaGraphicsResource *vbo_res) {
+  fprintf(stdout, "   deleting vbo\n");
+  // Unregister with CUDA
+  checkCudaErrors( cudaGraphicsUnregisterResource(vbo_res) );
+
+  glBindBuffer(1, *vbo);
+  glDeleteBuffers(1, vbo);
+
+  *vbo = 0;
 }
 
 __host__ void Render() {
-  
+
   // Launch Kernel
   runCUDA(&positionsVBO_CUDA);
 
   // Clear screen
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  
+
   // Set View Matrix
   glMatrixMode(GL_MODELVIEW);
   glLoadIdentity();
@@ -111,15 +130,17 @@ __host__ void Render() {
   glBindBuffer(GL_ARRAY_BUFFER, positionsVBO);
   glVertexPointer(4, GL_FLOAT, 0, 0);
   glEnableClientState(GL_VERTEX_ARRAY);
-  glColor3f(0.0f, 1.0f, 0.0f);
+  glColor3f(1.0f, 1.0f, 0.0f);
+  fprintf(stdout, "   drawing vertices\n");
   glDrawArrays(GL_POINTS, 0, mesh_width * mesh_height); // Where the magic happens
   glDisableClientState(GL_VERTEX_ARRAY);
-  
+
   // Switch Buffers
   glutSwapBuffers();
 
   // Increment Time
-  sim_time += 0.5f;
+  sim_time += 0.05f;
+  fprintf(stdout, "   simtime:%f\n", sim_time);
 }
 
 __host__ void Keyboard(int key, int x, int y) {
@@ -134,7 +155,11 @@ __host__ void Keyboard(int key, int x, int y) {
   }
 
   // Request display update
-  glutPostRedisplay();		  
+  glutPostRedisplay();
+}
+
+__host__ void idleSim() {
+  glutPostRedisplay();
 }
 
 // Called when OpenGL Window is resized to handle scaling
@@ -142,20 +167,21 @@ __host__ void windowResize(int height, int width) {
   glViewport(0, 0, width, height);
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
-  gluPerspective(45.0, (double)width / (double)height, 1.0, 200.0);
+  gluPerspective(45.0, (double)width / (double)height, 0.1, 10.0);
 }
 
 __host__ void GLInit(int argc, char* argv[]) {
-
+  fprintf(stdout, "   initializing gl\n");
   // Create Window
   glutInit(&argc, argv);
-  glutInitDisplayMode( GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH );
+  glutInitDisplayMode( GLUT_DOUBLE | GLUT_RGBA	 | GLUT_DEPTH );
   glutInitWindowSize(window_width, window_height);
   glutInitWindowPosition(0, 0);
   glutCreateWindow("cuda-boids");
 
   glutReshapeFunc(windowResize);
   glutDisplayFunc(Render);
+  glutIdleFunc(idleSim);
   glutSpecialFunc(Keyboard);
 
   // Allow Depth and Colors
@@ -168,7 +194,7 @@ __host__ void GLInit(int argc, char* argv[]) {
   glViewport(0, 0, window_width, window_height);
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
-  gluPerspective(45.0, (double)mesh_width / (double)mesh_height, 1.0, 200.0);
+  gluPerspective(60.0, (double)mesh_width / (double)mesh_height, 1.0, 200.0);
 }
 
 __host__ void printDeviceProps() {
@@ -190,30 +216,12 @@ __host__ void printDeviceProps() {
 // De-allocation of Memory after GLUT stops
 __host__ void onGLUTExit() {
    fprintf(stdout, "De-Allocating memory.\n");
-   //Deallocate(h_flock);
-}
 
-__host__ void createVBO(GLuint *vbo, struct cudaGraphicsResource **vbo_res, unsigned int vbo_res_flags) {
-  
-  // Create buffer object and register it with CUDA
-  glGenBuffers(1, vbo);
-  glBindBuffer(GL_ARRAY_BUFFER, *vbo);
-  unsigned int size = mesh_width * mesh_height * 4 * sizeof(float);
-  glBufferData(GL_ARRAY_BUFFER, size, 0, GL_DYNAMIC_DRAW);
-  
-  // Unbind Buffer
-  glBindBuffer(GL_ARRAY_BUFFER, 0);
-  
-  // Register VBO
-  checkCudaErrors( cudaGraphicsGLRegisterBuffer(vbo_res, *vbo, vbo_res_flags) );
-}
+   if (positionsVBO) {
+     deleteVBO(&positionsVBO, positionsVBO_CUDA);
+   }
 
-__host__ void deleteVBO(GLuint *vbo, struct cudaGraphicsResource *vbo_res) {
-  // Unregister with CUDA
-  checkCudaErrors( cudaGraphicsUnregisterResource(vbo_res) );
-
-  glBindBuffer(1, *vbo);
-  glDeleteBuffers(1, vbo);
+   cudaDeviceReset();
 }
 
 __host__ int main (int argc, char* argv[]) {
@@ -238,25 +246,25 @@ __host__ int main (int argc, char* argv[]) {
          return 1;
       }
    }
-   
+
    // Print out GPU Details
    printDeviceProps();
-  
+
    // OpenGL / GLUT Initialization
    GLInit(argc, argv);
-   
+
    // Create VBO
    createVBO(&positionsVBO, &positionsVBO_CUDA, cudaGraphicsMapFlagsWriteDiscard);
 
    // Run initial CUDA step
    cudaGLSetGLDevice(0);
-   runCUDA(&positionsVBO_CUDA); 
-   
+   //runCUDA(&positionsVBO_CUDA);
+
    // Start GLUT Loop
+   fprintf(stdout, "   starting main loop\n");
    glutMainLoop();
-   
+
    //onGLUTExit();
 
   return 0;
 }
-
