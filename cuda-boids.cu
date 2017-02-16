@@ -13,6 +13,8 @@
 
 #include <cuda_runtime.h>
 #include <cuda_gl_interop.h>
+#include <helper_cuda.h>
+#include <helper_cuda_gl.h> 
 
 #include <aligned_allocator.h>
 
@@ -20,47 +22,43 @@
 #include "flock.h"
 #include "vector3f.h"
 
-static double device_time = 0.0;
 double rX = 0.0;
 double rY = 0.0;
+float time = 0.0;
 int n = 0;
-//Flock h_flock = Flock();
+int window_width = 1000;
+wint window_height = 1000;
+int mesh_width = 500;
+int msh_height = 500;
+GLuint positionsVBO;
+struct cudaGraphicsResource* positionsVBO_CUDA;
 
-__global__ void gpu_boids_kernel(int n, Flock* dev_flock) {
-   
+__global__ void kernel(float4* positions, unsigned int mesh_width, unsigned int mesh_height, float time) {
+   unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+   unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+   float u = x / (float)mesh_width;
+   float v = y / (float)mesh_height;
+   u = u * 2.0f - 1.0f;
+   v = v * 2.0f - 1.0f;
+
+   float freq = 4.0f;
+   float w = sinf(u * freq + time)
+	   * cosf(v * freq + time) * 0.5f;
+
+   positions[y * width + x] = make_float4(u, w, v, 1.0f);
 }
 
 __host__ void help() {
    fprintf(stderr,"./boids --help|-h --nboids|-n \n");
 }
 
-__host__ void gpu_boids(Flock* h_flock) {
-  // Allocate Device Memory
-  Flock* dev_flock = NULL;
-  cudaMalloc(&dev_flock, sizeof(Boid)*n);
-  // Create Cuda Events
-  cudaEvent_t calc1_event, calc2_event;
-  cudaEventCreate(&calc1_event);
-  cudaEventCreate(&calc2_event);
-  // Copy Host Memory to Device
-  cudaMemcpy(dev_flock, h_flock, sizeof(Boid)*n, cudaMemcpyHostToDevice);
-  cudaEventRecord(calc1_event);
-  // Entering Kernel
-  fprintf(stdout,"entering kernel.\n");
-  gpu_boids_kernel<<<1,1>>>(n, dev_flock);
-  cudaEventRecord(calc2_event);
-  // Free Device Memory
-  cudaFree(dev_flock);
-
-  // Record device time
-  float time;
-  cudaEventElapsedTime(&time, calc1_event, calc2_event);
-  device_time += time;
-
-  // Destroy event timers
-  cudaEventDestroy(calc1_event);
-  cudaEventDestroy(calc2_event);
-
+__host__ void launchKernel(float4* positions, unsigned int mesh_width, unsigned int mesh_height, float time) {
+  dim3 dimBlock(16, 16, 1);
+  dim3 dimGrid(width / dimBlock.x, height / dimBlock.y, 1);
+  fprintf(stdout, "   Entering Kernel.\n");
+  kernel<<<dimGrid, dimBlock>>>(positions, width, height, time);
+  fprintf(stdout, "   Exited Kernel.\n");
 }
 
 __host__ void drawBoid() {
@@ -80,21 +78,31 @@ __host__ void drawBoid() {
 }
 
 __host__ void Render() {
-  // Set Background Color
-  glClearColor(0.4, 0.4, 0.4, 1.0);
+  
   // Clear screen
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-  // Reset transformations
-  glLoadIdentity();
   
+  glMatrixMode(GL_MODELVIEW);
+  glLoadIdentity();
+
   // Perspective modifications
   glRotatef(rX, 1.0, 0.0, 0.0);
   glRotatef(rY, 0.0, 1.0, 0.0);
+  
+  glClearColor(0.0, 0.0, 0.0, 0.0);
+  glClear(GL_COLOR_BUFFER_BIT);
+  glColor3f(1.0, 0.0, 0.0);
+  glOrtho(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0);
 
-  drawBoid();
-
-  //h_flock.update();
+  glBindBuffer(GL_ARRAY_BUFFER, positionsVBO);
+  glVertexPointer(4, GL_FLOAT, 0, 0);
+  glEnableClientState(GL_VERTEX_ARRAY);
+  glDrawArrays(GL_POINTS, 0, width * height); // Where the magic happens
+  glDisableClientState(GL_VERTEX_ARRAY);
+  
+  // Switch Buffers
+  glutSwapBuffers();
+  glutPostRedisplay();
 }
 
 __host__ void Keyboard(int key, int x, int y) {
@@ -117,19 +125,25 @@ __host__ void GLInit(int argc, char* argv[]) {
   // Create Window
   glutInit(&argc, argv);
   glutInitDisplayMode( GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH );
-  glutInitWindowSize(700, 700);
-  glutInitWindowPosition(20, 20);
+  glutInitWindowSize(window_width, window_height);
+  glutInitWindowPosition(0, 0);
   glutCreateWindow("cuda-boids");
+
+  glutReshapeFunc(windowResize);
+  glutDisplayFunc(Render);
+  glutSpecialFunc(Keyboard);
 
   // Allow Depth and Colors
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_COLOR_MATERIAL);
 
   // Set the color of the background
-  glClearColor(0.7f, 0.8f, 1.0f, 1.0f);
-  glEnable(GL_LIGHTING);
-  glEnable(GL_LIGHT0);
-  glEnable(GL_NORMALIZE);
+  glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+  glDisable(GL_DEPTH_TEST);
+  glViewport(0, 0, window_width, window_height);
+  glMatrixMode(GL_PROJECTION);
+  glLoadIdentity();
+  gluPerspective(45.0, (double)width / (double)height, 1.0, 200.0);
 }
 
 // Called when OpenGL Window is resized to handle scaling
@@ -162,6 +176,43 @@ void onGLUTExit() {
    //Deallocate(h_flock);
 }
 
+void createVBO(GLuint *vbo, struct cudaGraphicsResource **vbo_res, unsigned int vbo_res_flags) {
+  
+  // Create buffer object and register it with CUDA
+  glGenBuffers(1, vbo);
+  glBindBuffer(GL_ARRAY_BUFFER, *vbo);
+  unsigned int size = mesh_width * mesh_height * 4 * sizeof(float);
+  glBufferData(GL_ARRAY_BUFFER, size, 0, GL_DYNAMIC_DRAW);
+  
+  // Unbind Buffer
+  glBindBuffer(GL_ARRAY_BUFFER, 0);
+  
+  // Register VBO
+  checkCudaErrors( cudaGraphicsGLRegisterBuffer(vbo_res, *vbo, vbo_res_flags) );
+}
+
+void deleteVBO(GLuint *vbo, struct cudaGraphicsResource *vbo_res) {
+  // Unregister with CUDA
+  checkCudaErrors( cudaGraphicsUnregisterResource(vbo_res) );
+
+  glBindBuffer(1, *vbo);
+  glDeleteBuffers(1, vbo);
+}
+
+void runCUDA(struct cudaGraphicsResource ** vbo_resource) {
+  // Map VBO to GL with CUDA
+  float4* positions;
+  checkCudaErrors( cudaGraphicsMapResources(1, vbo_resource, 0) );
+  size_t num_bytes;
+  checkCudaErrors( cudaGraphicsResourceGetMappedPointer((void ** )&positions,
+		  &num_bytes,
+		  vbo_resource) );
+
+  launchKernel(positions, mesh_width, mesh_height, time); 
+  // Unmap Buffer
+  checkCudaErrors( cudaGraphicsUnmapResources(1, vbo_resource, 0) );
+}
+
 __host__ int main (int argc, char* argv[]) {
 
    for (int i = 1; i < argc; ++i) {
@@ -184,47 +235,24 @@ __host__ int main (int argc, char* argv[]) {
          return 1;
       }
    }
-
-   /*Flock h_flock = NULL;
-   //Allocate(h_flock, sizeof(Boid)*n);
-   Flock h_flock = Flock(n);
-   std::vector<Vector3f> h_flockPos;
-   for (int j = 0; j < n; j++) {
-      h_flockPos.push_back(h_flock.getBoidFromIndex(j).getPosition());
-      fprintf(stdout, "   added boid and pos:       %d\n", j);
-   }
-   fprintf(stdout, "   h_flock size:             %d\n", h_flock.getSize());
-   fprintf(stdout, "   h_flockPos size:          %lu\n", h_flockPos.size());
-   */
-    printDeviceProps();
-  
-   // OpenGL / GLUT
-   GLInit(argc, argv);
-   glutReshapeFunc(windowResize);
-   glutDisplayFunc(Render);
-   glutSpecialFunc(Keyboard);
-
-
-   // Explicitly set device
-   cudaGLSetGLDevice(0);
    
-   GLuint vertexArray;
+   // Print out GPU Details
+   printDeviceProps();
+  
+   // OpenGL / GLUT Initialization
+   GLInit(argc, argv);
+   
+   // Create VBO
+   createVBO(&positionsVBO, positionsVBO_CUDA, cudaGraphicsMapFlagsWriteDiscard);
 
-  // Create buffer object and register it with CUDA
-  glGenBuffers(1, &vertexArray);
-  glBindBuffer(GL_ARRAY_BUFFER, vertexArray);
-  glBufferData(GL_ARRAY_BUFFER, n*16, NULL, GL_DYNAMIC_DRAW);
-  // Unbind Buffer
-  glBindBuffer(GL_ARRAY_BUFFER, 0);
-  // Register VBO
-  cudaGLRegisterBufferObject(vertexArray);
-
-    
+   // Run initial CUDA step
+   checkCudaErrors( cudaGLSetGLDevice(0) );
+   runCUDA(&positionsVBO_CUDA); 
+   
+   // Start GLUT Loop
    glutMainLoop();
    
-   // Due to GL/GLUT, program exits as windows closes
-   // So this code can't be reached without FreeGLUT.
-   onGLUTExit();
+   //onGLUTExit();
 
   return 0;
 }
