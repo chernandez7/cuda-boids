@@ -5,6 +5,7 @@
 #include <ctype.h>
 #include <assert.h>
 #include <vector>
+// OpenGL
 #ifdef __APPLE__
 #include <OpenGL/gl.h>
 #include <GLUT/glut.h>
@@ -14,30 +15,35 @@
 #endif
 // CUDA
 #include <cuda_runtime.h>
-#include <cuda_gl_interop.h>
+#include <cuda_gl_interop.h> // interop functionality
 #include <helper_cuda.h>
-#include <helper_cuda_gl.h>
+#include <helper_cuda_gl.h> // checkCudaErrors()
 // COMMON
 #include <aligned_allocator.h>
-// Headers
+// Object Headers
 #include "boid.h"
 #include "flock.h"
 #include "vector3f.h"
 
-// Simulation Variables
+// Rotation of X-axis camera perspective
 double rX = 0.0;
+// Rotation of Y-axis camera perspective
 double rY = 0.0;
+// Time var to increment function over time
 float sim_time = 0.0;
+// Number of boids in simulation
 int n = 0;
-// Constants
+// Monitor metrics
 const unsigned int window_width = 512;
 const unsigned int window_height = 512;
+// Mesh metrics
 const unsigned int mesh_width = 256;
 const unsigned int mesh_height = 256;
-//VBO
+// OpenGL Vertex Buffer Object
 GLuint positionsVBO;
 struct cudaGraphicsResource* positionsVBO_CUDA;
 
+/* Kernel function sent to GPU that does calculations required in boid algorithm*/
 __global__ void kernel(float4* positions, unsigned int width, unsigned int height, float t) {
    unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
    unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -54,10 +60,12 @@ __global__ void kernel(float4* positions, unsigned int width, unsigned int heigh
    positions[y * width + x] = make_float4(u, w, v, 1.0f);
 }
 
+// Function called when incorrect command line syntax is called or -h flag is passed
 __host__ void help() {
    fprintf(stderr,"./boids --help|-h --nboids|-n \n");
 }
 
+// Function to setup and launch kernel
 __host__ void launchKernel(float4* positions, unsigned int width, unsigned int height, float t) {
   dim3 dimBlock(16, 16, 1);
   dim3 dimGrid(width / dimBlock.x, height / dimBlock.y, 1);
@@ -66,18 +74,21 @@ __host__ void launchKernel(float4* positions, unsigned int width, unsigned int h
   fprintf(stdout, "   exiting kernel\n");
 }
 
+// Runs all CUDA related functions
 __host__ void runCUDA(struct cudaGraphicsResource** vbo_resource) {
   fprintf(stdout, "   running cuda\n");
   // Map VBO to GL with CUDA
   float4* positions;
-  checkCudaErrors( cudaGraphicsMapResources(1, vbo_resource, 0) );
+  // Map resource into GPU memory
+  checkCudaErrors( cudaGraphicsMapResources(1, vbo_resource, 0) ); 
   size_t num_bytes;
+  // Gets pointer to mapped resource
   checkCudaErrors( cudaGraphicsResourceGetMappedPointer((void ** )&positions,
 		  &num_bytes,
 		  *vbo_resource) );
-
+  // Launch kernel with pointer to mapped resource
   launchKernel(positions, mesh_width, mesh_height, sim_time);
-  // Unmap Buffer
+  // Unmapping Buffer sends resource back to OpenGL accessible memory
   fprintf(stdout, "   unmapping buffer\n");
   checkCudaErrors( cudaGraphicsUnmapResources(1, vbo_resource, 0) );
   fprintf(stdout, "     x:%f  y:%f  z:%f w:%f\n", &positions[10].x, &positions[10].y, &positions[10].z, &positions[10].w);
@@ -86,16 +97,18 @@ __host__ void runCUDA(struct cudaGraphicsResource** vbo_resource) {
 __host__ void createVBO(GLuint *vbo, struct cudaGraphicsResource **vbo_res, unsigned int vbo_res_flags) {
   fprintf(stdout, "   creating vbo\n");
   assert(vbo);
-  // Create buffer object and register it with CUDA
+  // Create vertex buffer object
   glGenBuffers(1, vbo);
+  // Bind pointer to buffer as an GL_ARRAY_BUFFER type
   glBindBuffer(GL_ARRAY_BUFFER, *vbo);
-  unsigned int size = mesh_width * mesh_height * 4 * sizeof(float);
+  unsigned int size = mesh_width * mesh_height * 4 * sizeof(float); // Size of allocated memory
+  // Add actual data to GL Buffer 
   glBufferData(GL_ARRAY_BUFFER, size, 0, GL_DYNAMIC_DRAW);
 
   // Unbind Buffer
   glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-  // Register VBO
+  // Register VBO to CUDA memory
   checkCudaErrors( cudaGraphicsGLRegisterBuffer(vbo_res, *vbo, vbo_res_flags) );
 }
 
@@ -104,12 +117,14 @@ __host__ void deleteVBO(GLuint *vbo, struct cudaGraphicsResource *vbo_res) {
   // Unregister with CUDA
   checkCudaErrors( cudaGraphicsUnregisterResource(vbo_res) );
 
+  // Delete VBO and free pointer
   glBindBuffer(1, *vbo);
   glDeleteBuffers(1, vbo);
 
   *vbo = 0;
 }
 
+// Main render function for GLUT which loops until exit
 __host__ void Render() {
 
   // Launch Kernel
@@ -132,10 +147,10 @@ __host__ void Render() {
   glEnableClientState(GL_VERTEX_ARRAY);
   glColor3f(1.0f, 1.0f, 0.0f);
   fprintf(stdout, "   drawing vertices\n");
-  glDrawArrays(GL_POINTS, 0, mesh_width * mesh_height); // Where the magic happens
+  glDrawArrays(GL_POINTS, 0, mesh_width * mesh_height); // Rendering happens here
   glDisableClientState(GL_VERTEX_ARRAY);
 
-  // Switch Buffers
+  // Switch Buffers to show rendered
   glutSwapBuffers();
 
   // Increment Time
@@ -143,6 +158,7 @@ __host__ void Render() {
   fprintf(stdout, "   simtime:%f\n", sim_time);
 }
 
+// Controls for simulation
 __host__ void Keyboard(int key, int x, int y) {
   if (key == GLUT_KEY_RIGHT) {
     rY += 15;
@@ -158,6 +174,7 @@ __host__ void Keyboard(int key, int x, int y) {
   glutPostRedisplay();
 }
 
+// Idle function for GLUT, called when nothing is happening
 __host__ void idleSim() {
   glutPostRedisplay();
 }
@@ -179,6 +196,7 @@ __host__ void GLInit(int argc, char* argv[]) {
   glutInitWindowPosition(0, 0);
   glutCreateWindow("cuda-boids");
 
+  // Set GLUT functions for simulation
   glutReshapeFunc(windowResize);
   glutDisplayFunc(Render);
   glutIdleFunc(idleSim);
@@ -191,6 +209,8 @@ __host__ void GLInit(int argc, char* argv[]) {
   // Set the color of the background
   glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
   glDisable(GL_DEPTH_TEST);
+
+  // Set perspective mode
   glViewport(0, 0, window_width, window_height);
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
@@ -225,7 +245,7 @@ __host__ void onGLUTExit() {
 }
 
 __host__ int main (int argc, char* argv[]) {
-
+   // Parse command line parameters
    for (int i = 1; i < argc; ++i) {
 #define check_index(i,str) \
    if ((i) >= argc) \
@@ -268,3 +288,4 @@ __host__ int main (int argc, char* argv[]) {
 
   return 0;
 }
+
