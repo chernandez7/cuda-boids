@@ -7,7 +7,7 @@ CUDA_HOME?= /Developer/NVIDIA/CUDA-8.0/
 NVFLAGS  = -I$(CUDA_HOME)include -I$(CUDA_HOME)samples/common/inc --ptxas-options="-v" -gencode=arch=compute_35,code=\"sm_35,compute_35\"
 CXXFLAGS = -O3 -I. -I$(COMMON) $(DBG)
 
-EXEC = cuda-boids
+EXEC = main
 
 all: $(EXEC)
 
@@ -24,11 +24,11 @@ LDFLAGS	= $(COMMON_LIBS) -lcudart -Xlinker -framework,OpenGL,-framework,GLUT #-L
 	$(NVCC) $(CXXFLAGS) $(NVFLAGS) -c $<
 #$(NVCC) -MM $(CXXFLAGS) $< > $*.d
 
-main: main.h
-	$(NVCC) $(CXXFLAGS) $(NVFLAGS) -o main $^ $(LDFLAGS)
+kernel: kernel.cu
+	$(NVCC) $(CXXFLAGS) $(NVFLAGS) -o kernel $^ $(LDFLAGS)
 
-cuda-boids: cuda-boids.o main.o $(COMMON_OBJS)
-	$(NVCC) $(CXXFLAGS) $(NVFLAGS) -o cuda-boids $^ $(LDFLAGS)
+main: main.cpp kernel.o $(COMMON_OBJS)
+	$(NVCC) $(CXXFLAGS) $(NVFLAGS) -o main $^ $(LDFLAGS)
 
 clean: clean_common
 	/bin/rm -fv $(EXEC) *.d *.o *.optrpt

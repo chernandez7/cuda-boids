@@ -1,12 +1,11 @@
 
-#include <stdio.h>
-#include <cmath>
 #include "kernel.h"
 
-dim3 threadsPerBlock(blockSize);
+dim3 threadsPerBlock(BlockSize);
 
 const float boidMass = 1.0f;
 const float scene_scale = 4e2;
+__device__ curandState_t state;
 const __device__ float neighborRadius = 20.0f;
 const __device__ float neighborAngle = 180.0f;
 const __device__ float c_alignment = 2.0f;
@@ -18,41 +17,91 @@ float4* dev_pos;
 float3* dev_vel;
 float3* dev_acc;
 
-__host__
-void initCuda(int n) {
-  dim3 fullBlocksPerGrid((int)ceil(float(n)/float(blockSize)));
+__device__
+float distanceFormula(float3 myPos, float3 theirPos) {
+  float dx = myPos.x - theirPos.x;
+  float dy = myPos.y - theirPos.y;
+  float dz = myPos.z - theirPos.z;
 
-  checkCudaErrors( cudaMalloc((void**)&dev_pos, n*sizeof(float4)) );
-  checkCudaErrors( cudaMalloc((void**)&dev_vel, n*sizeof(float3)) );
-  checkCudaErrors( cudaMalloc((void**)&dev_acc, n*sizeof(float3)) );
-
-  randomPositionArray<<<fullBlocksPerGrid, BlockSize>>>(1, n, dev_pos, boidMass);
-  randomVelocityArray<<<fullBlocksPerGrid, BlockSize>>>(2, n, dev_vel);
+  float dist = sqrt(dx*dx + dy*dy + dz*dz);
+  return dist;
 }
 
-__host__
-void cudaFlockingUpdateWrapper(int n, float dt, float3 target) {
-  dim3 fullBlocksPerGrid((int)ceil(float(n)/float(blockSize)));
-
-  updateAccelaration<<<fullBlocksPerGrid, blockSize>>>(n, dev_pos, dev_vel, dev_acc, target);
-  updatePosition<<<fullBlocksPerGrid, blockSize>>>(n, dt, dev_pos, dev_vel, dev_acc);
+__device__
+float dotProduct(float3 v1, float3 v2) {
+  return (v1.x * v2.x) + (v1.y * v2.y) + (v1.z * v2.z);
 }
 
-__host__
-void cudaUpdateVBO(int n, float* vbodptr, float* velptr) {
-  dim3 fullBlocksPerGrid((int)ceil(float(n)/float(blockSize)));
+__device__
+void add2Vectors(float3 v1, float3 v2) {
+  v1.x += v2.x;
+  v1.y += v2.y;
+  v1.z += v2.z;
+}
 
-  sendToVBO<<<fullBlocksPerGrid, blockSize>>>(n, dev_pos, dev_vel, vbodptr, velptr, scene_scale);
+__device__
+void sub2Vectors(float3 v1, float3 v2) {
+  v1.x -= v2.x;
+  v1.y -= v2.y;
+  v1.z -= v2.z;
+}
+
+__device__
+void mulVectorByScalar(float scalar, float3 vector) {
+  vector.x *= scalar;
+  vector.y *= scalar;
+  vector.z *= scalar;
+}
+
+__device__
+void divVectorByScalar(float scalar, float3 vector) {
+  vector.x /= scalar;
+  vector.y /= scalar;
+  vector.z /= scalar;
+}
+
+__device__
+void addVectorByScalar(float scalar, float3 vector) {
+  vector.x += scalar;
+  vector.y += scalar;
+  vector.z += scalar;
+}
+
+__device__
+float magnitudeOfVector(float3 vector) {
+  return sqrt(vector.x*vector.x + vector.y*vector.y + vector.z*vector.z);
+}
+
+__device__
+void normalizeVector(float3 vector) {
+  float magnitude = magnitudeOfVector(vector);
+  if (magnitude > 0) {
+    vector.x /= magnitude;
+    vector.y /= magnitude;
+    vector.z /= magnitude;
+  }
+}
+
+__device__
+float3 truncate(float3 direction, float maxLength) {
+  if (magnitudeOfVector(direction) > maxLength) {
+    normalizeVector(direction);
+    mulVectorByScalar(maxLength, direction);
+    return direction;
+  } else {
+    return direction;
+  }
 }
 
 __global__
 void generateRandomPosArray(int time, int n, float4* arr, float mass) {
   int index = (blockIdx.x * blockDim.x) + threadIdx.x;
   if(index < n) {
+    curand_init(0, 0, 0, &state);
 
-    arr[index].x = rand() % 3 - 2;
-    arr[index].y = rand() % 3 - 2;
-    arr[index].z = rand() % 3 - 2;
+    arr[index].x = curand(&state) % 2;
+    arr[index].y = curand(&state) % 2;
+    arr[index].z = curand(&state) % 2;
     arr[index].w = 1.0f;
   }
 }
@@ -61,10 +110,11 @@ __global__
 void generateRandomVelArray(int time, int n, float3* arr) {
   int index = (blockIdx.x * blockDim.x) + threadIdx.x;
   if(index < n) {
+    curand_init(0, 0, 0, &state);
 
-    arr[index].x = rand() % 3 - 2;
-    arr[index].y = rand() % 3 - 2;
-    arr[index].z = rand() % 3 - 2;
+    arr[index].x = curand(&state) % 3;
+    arr[index].y = curand(&state) % 3;
+    arr[index].z = curand(&state) % 3;
   }
 }
 
@@ -73,41 +123,66 @@ void updateAccelaration(int n, float4* pos, float3* vel,
                         float3* acc, float3 target) {
   int index = threadIdx.x + (blockIdx.x * blockDim.x);
   if( index < n ) {
-    float3 myPosition(pos[index].x, pos[index].y, pos[index].z);
-    float3 myVelocity(vel[index].x, vel[index].y, vel[index].z);
+    float3 myPosition = make_float3(pos[index].x, pos[index].y, pos[index].z);
+    float3 myVelocity = make_float3(vel[index].x, vel[index].y, vel[index].z);
 
     int numberOfNeighbors = 0;
-    float3 alignmentNumerator(0.0f, 0.0f, 0.0f);
-    float3 alignmentVelocity(0.0f, 0.0f, 0.0f);
-    float3 separationVel(0.0f, 0.0f, 0.0f);
-    float3 centerOfMass(0.0f, 0.0f, 0.0f);
-    float3 desiredVel(0.0f, 0.0f, 0.0f);
+    float3 alignmentNumerator = make_float3(0.0f, 0.0f, 0.0f);
+    float3 alignmentVelocity = make_float3(0.0f, 0.0f, 0.0f);
+    float3 separationVel = make_float3(0.0f, 0.0f, 0.0f);
+    float3 centerOfMass = make_float3(0.0f, 0.0f, 0.0f);
+    float3 desiredVel = make_float3(0.0f, 0.0f, 0.0f);
 
     for (int i = 0; i < n; i++) {
-      float3 theirPos(pos[i].x, pos[i].y, pos[i].z);
-      float distanceToNeighbor = distanceFormula(myPosition, theirPosition);
-      if (distanceToNeighbor < neighborRadius &&
-        dotProduct(normalizeVector(myVelocity), normalizeVector(sub2Vectors(theirPos, myPosition))) > cos(neighborAngle / 2)) {
-        add2Vectors(alignmentNumerator, vel[i]);
-        add2Vectors(separationVel, sub2Vectors(myPosition, theirPos) / (distanceToNeighbor * distanceToNeighbor));
-        add2Vectors(centerOfMass, theirPos);
-        numberOfNeighbors++;
+      float3 theirPos = make_float3(pos[i].x, pos[i].y, pos[i].z);
+      float distanceToNeighbor = distanceFormula(myPosition, theirPos);
+      if (distanceToNeighbor < neighborRadius) {
+	normalizeVector(myVelocity);
+	sub2Vectors(theirPos, myPosition);
+        normalizeVector(theirPos);
+	if (dotProduct(myVelocity, theirPos) > cos(neighborAngle / 2)) {
+          add2Vectors(alignmentNumerator, vel[i]);
+	  sub2Vectors(myPosition, theirPos);
+	  divVectorByScalar(distanceToNeighbor * distanceToNeighbor, myPosition);
+          add2Vectors(separationVel, myPosition);
+          add2Vectors(centerOfMass, theirPos);
+          numberOfNeighbors++;
+	}
       }
     }
     if (numberOfNeighbors > 0) {
-      alignmentVelocity = divVectorByScalar(float(numberOfNeighbors), alignmentNumerator);
-      centerOfMass = divVectorByScalar(float(numberOfNeighbors), centerOfMass);
-      desiredVel = mulVectorByScalar(c_alignment, alignmentVelocity) +
-                   mulVectorByScalar(c_separation, separationVel) +
-                   mulVectorByScalar(c_cohesion * sub2Vectors(centerOfMass, myPosition)) +
-                   mulVectorByScalar(c_seek * normalizeVector(sub2Vectors(target, myPosition)));
+      divVectorByScalar(float(numberOfNeighbors), alignmentNumerator);
+      alignmentVelocity = alignmentNumerator;
+      divVectorByScalar(float(numberOfNeighbors), centerOfMass);
+
+      mulVectorByScalar(c_alignment, alignmentVelocity);
+      mulVectorByScalar(c_separation, separationVel);
+      sub2Vectors(centerOfMass, myPosition);
+      mulVectorByScalar(c_cohesion, centerOfMass);
+      sub2Vectors(target, myPosition);
+      normalizeVector(target);
+      mulVectorByScalar(c_seek, target);
+
+      float3 temp = make_float3(0, 0, 0);
+      add2Vectors(temp, alignmentVelocity);
+      add2Vectors(temp, separationVel);
+      add2Vectors(temp, centerOfMass);
+      add2Vectors(temp, target);
+      desiredVel = temp;
     } else {
-      desiredVel = mulVectorByScalar(c_seek, sub2Vectors(target, myPosition));
+      sub2Vectors(target, myPosition);
+      mulVectorByScalar(c_seek, target);
+      desiredVel = target;
     }
     if (magnitudeOfVector(myPosition) > 800.0f) {
-      desiredVel = normalizeVector(-myPosition);
+      float3 neg_myPosition = make_float3(-myPosition.x, -myPosition.y, -myPosition.z);
+      normalizeVector(neg_myPosition);
+      desiredVel = neg_myPosition;
     }
-    acc[index] = truncate(sub2Vectors(desiredVel, myVelocity), 2.0f) / pos[index].w;
+    sub2Vectors(desiredVel, myVelocity);
+    desiredVel = truncate(desiredVel, 2.0f);
+    divVectorByScalar(pos[index].w, desiredVel);
+    acc[index] = desiredVel;
   }
 }
 
@@ -115,9 +190,10 @@ __global__
 void updatePosition(int n, float dt, float4 *pos, float3 *vel, float3 *acc) {
   int index = threadIdx.x + (blockIdx.x * blockDim.x);
   if( index < n ) {
-    vel[index] = mulVectorByScalar(2.0f,
-                 normalizeVector(mulVectorByScalar(dt,
-                 add2Vectors(vel[index], acc[index])));
+    add2Vectors(vel[index], acc[index]);
+    mulVectorByScalar(dt, vel[index]);
+    normalizeVector(vel[index]);
+    mulVectorByScalar(2.0f, vel[index]);
 
     // Runge- Kutta Method for ODE is a possibility
 
@@ -149,76 +225,29 @@ void sendToVBO(int n, float4* pos, float3* vel,
   }
 }
 
-__device__
-float3 truncate(float3 direction, float maxLength) {
-  if (magnitudeOfVector(direction) > maxLength) {
-    return normalizeVector(direction) * maxLength;
-  } else {
-    return direction;
-  }
+__host__
+void initCuda(int n) {
+  dim3 fullBlocksPerGrid((int)ceil(float(n)/float(BlockSize)));
+
+  checkCudaErrors( cudaMalloc((void**)&dev_pos, n*sizeof(float4)) );
+  checkCudaErrors( cudaMalloc((void**)&dev_vel, n*sizeof(float3)) );
+  checkCudaErrors( cudaMalloc((void**)&dev_acc, n*sizeof(float3)) );
+
+  generateRandomPosArray<<<fullBlocksPerGrid, BlockSize>>>(1, n, dev_pos, boidMass);
+  generateRandomVelArray<<<fullBlocksPerGrid, BlockSize>>>(2, n, dev_vel);
 }
 
-__device__
-float distanceFormula(float3 myPos, float3 theirPos) {
-  float dx = myPos.x - theirPos.x;
-  float dy = myPos.y - theirPos.y;
-  float dz = myPos.z - theirPos.z;
+__host__
+void cudaFlockingUpdateWrapper(int n, float dt, float3 target) {
+  dim3 fullBlocksPerGrid((int)ceil(float(n)/float(BlockSize)));
 
-  float dist = sqrt(dx*dx + dy*dy + dz*dz)
-  return dist;
+  updateAccelaration<<<fullBlocksPerGrid, BlockSize>>>(n, dev_pos, dev_vel, dev_acc, target);
+  updatePosition<<<fullBlocksPerGrid, BlockSize>>>(n, dt, dev_pos, dev_vel, dev_acc);
 }
 
-__device__
-float magnitudeOfVector(float3 vector) {
-  return sqrt(vector.x*vector.x + vector.y*vector.y + vector.z*vector.z);
-}
+__host__
+void cudaUpdateVBO(int n, float* vbodptr, float* velptr) {
+  dim3 fullBlocksPerGrid((int)ceil(float(n)/float(BlockSize)));
 
-__device__
-void normalizeVector(float3 vector) {
-  float magnitude = magnitudeOfVector(vector);
-  if (magnitude > 0) {
-    vector.x /= magnitude;
-    vector.y /= magnitude;
-    vector.z /= magnitude;
-  }
-}
-
-__device__
-float dotProduct(float3 v1, float3 v2) {
-  return (v1.x * v2.x) + (v1.y * v2.y) + (v1.z * v2.z);
-}
-
-__device__
-void add2Vectors(float3 v1, float3 v2) {
-  float v1.x += v2.x;
-  float v1.y += v2.y;
-  float v1.z += v2.z;
-}
-
-__device__
-void sub2Vectors(float3 v1, float3 v2) {
-  float v1.x -= v2.x;
-  float v1.y -= v2.y;
-  float v1.z -= v2.z;
-}
-
-__device__
-void mulVectorByScalar(float scalar, float3 vector) {
-  vector.x *= scalar;
-  vector.y *= scalar;
-  vector.z *= scalar;
-}
-
-__device__
-void divVectorByScalar(float scalar, float3 vector) {
-  vector.x /= scalar;
-  vector.y /= scalar;
-  vector.z /= scalar;
-}
-
-__device__
-void addVectorByScalar(float scalar, float3 vector) {
-  vector.x += scalar;
-  vector.y += scalar;
-  vector.z += scalar;
+  sendToVBO<<<fullBlocksPerGrid, BlockSize>>>(n, dev_pos, dev_vel, vbodptr, velptr, scene_scale);
 }

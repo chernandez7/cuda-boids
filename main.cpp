@@ -1,5 +1,6 @@
 
 #include "main.h"
+#include "kernel.h"
 
 __host__
 int main(int argc, char* argv[]) {
@@ -93,7 +94,7 @@ void Init(int argc, char* argv[]) {
   glViewport(0, 0, window_width, window_height);
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
-  gluPerspective(60.0, (double)mesh_width / (double)mesh_height, 1.0, 200.0);
+  gluPerspective(60.0, (double)window_width / (double)window_height, 0.1, 10.0);
 
   /*
   // Init GLEW
@@ -114,7 +115,7 @@ void initVAO(void) {
 	GLfloat *velocities = new GLfloat[3*(nBoids)];
   GLuint *bindices    = new GLuint [nBoids];
 
-    for(int i = 0; i < N_FOR_VIS; i++) {
+    for(int i = 0; i < nBoids; i++) {
       bodies[4*i+0] = 0.0f;
       bodies[4*i+1] = 0.0f;
       bodies[4*i+2] = 0.0f;
@@ -176,7 +177,6 @@ void Keyboard(unsigned char key, int x, int y) {
     rX += 15;
   } else if (key == 27) { // Escape
     exit(1);
-    break;
   }
 
   // Request display update
