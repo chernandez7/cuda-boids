@@ -67,7 +67,7 @@ __host__ void help() {
 
 // Function to setup and launch kernel
 __host__ void launchKernel(float4* positions, unsigned int width, unsigned int height, float t) {
-  dim3 dimBlock(16, 16, 1);
+  dim3 dimBlock(8, 8, 1);
   dim3 dimGrid(width / dimBlock.x, height / dimBlock.y, 1);
   fprintf(stdout, "   launching kernel\n");
   kernel<<<dimGrid, dimBlock>>>(positions, width, height, t);
@@ -80,12 +80,13 @@ __host__ void runCUDA(struct cudaGraphicsResource** vbo_resource) {
   // Map VBO to GL with CUDA
   float4* positions;
   // Map resource into GPU memory
-  checkCudaErrors( cudaGraphicsMapResources(1, vbo_resource, 0) ); 
+  checkCudaErrors( cudaGraphicsMapResources(1, vbo_resource, 0) );
   size_t num_bytes;
   // Gets pointer to mapped resource
-  checkCudaErrors( cudaGraphicsResourceGetMappedPointer((void ** )&positions,
+  checkCudaErrors( cudaGraphicsResourceGetMappedPointer((void **)&positions,
 		  &num_bytes,
 		  *vbo_resource) );
+  printf("   CUDA mapped VBO: May access %ld bytes\n", num_bytes);
   // Launch kernel with pointer to mapped resource
   launchKernel(positions, mesh_width, mesh_height, sim_time);
   cudaDeviceSynchronize(); // Let all threads syncronize and complete
@@ -103,12 +104,12 @@ __host__ void createVBO(GLuint *vbo, struct cudaGraphicsResource **vbo_res, unsi
 		  vbo	// Array to store
 		  );
   // Bind pointer to buffer as an GL_ARRAY_BUFFER type
-  glBindBuffer(GL_ARRAY_BUFFER,	// Connect data to GL_ARRAY_BUFFER 
+  glBindBuffer(GL_ARRAY_BUFFER,	// Connect data to GL_ARRAY_BUFFER
 		  		// (Note: Only one link to a buffer at a time)
 		  *vbo		// Data to be connected
 		  );
   unsigned int size = mesh_width * mesh_height * 4 * sizeof(float); // Mesh * 4 float object (X, Y, Z, W)
-  // Add actual data to GL Buffer 
+  // Add actual data to GL Buffer
   glBufferData(GL_ARRAY_BUFFER, 	// Which buffer to allocate memory for
 		  size, 		// Size of buffer
 		  0, 			// Data to store in buffer (if 0/NULL, will be added later)
@@ -164,7 +165,7 @@ __host__ void Render() {
   glutSwapBuffers();
 
   // Increment Time
-  sim_time += 0.05f;
+  sim_time += 0.01f;
   fprintf(stdout, "   simtime:%f\n", sim_time);
 }
 
@@ -210,7 +211,7 @@ __host__ void GLInit(int argc, char* argv[]) {
   glutReshapeFunc(windowResize);
   glutDisplayFunc(Render);
   glutIdleFunc(idleSim);
-  glutSpecialFunc(Keyboard);
+  glutKeyboardFunc(Keyboard);
 
   // Allow Depth and Colors
   glEnable(GL_DEPTH_TEST);
@@ -283,12 +284,13 @@ __host__ int main (int argc, char* argv[]) {
    // OpenGL / GLUT Initialization
    GLInit(argc, argv);
 
+   // Run initial CUDA step
+   cudaGLSetGLDevice(0);
+
    // Create VBO
    createVBO(&positionsVBO, &positionsVBO_CUDA, cudaGraphicsMapFlagsWriteDiscard);
 
-   // Run initial CUDA step
-   cudaGLSetGLDevice(0);
-   //runCUDA(&positionsVBO_CUDA);
+   runCUDA(&positionsVBO_CUDA);
 
    // Start GLUT Loop
    fprintf(stdout, "   starting main loop\n");
@@ -298,4 +300,3 @@ __host__ int main (int argc, char* argv[]) {
 
   return 0;
 }
-
