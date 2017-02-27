@@ -54,8 +54,7 @@ __global__ void kernel(float4* positions, unsigned int width, unsigned int heigh
    v = v * 2.0f - 1.0f;
 
    float freq = 4.0f;
-   float w = sinf(u * freq + t)
-	   * cosf(v * freq + t) * 0.5f;
+   float w = sinf(u * freq + t) * cosf(v * freq + t) * 0.5f;
 
    positions[y * width + x] = make_float4(u, w, v, 1.0f);
 }
@@ -69,14 +68,14 @@ __host__ void help() {
 __host__ void launchKernel(float4* positions, unsigned int width, unsigned int height, float t) {
   dim3 dimBlock(8, 8, 1);
   dim3 dimGrid(width / dimBlock.x, height / dimBlock.y, 1);
-  fprintf(stdout, "   launching kernel\n");
+  //fprintf(stdout, "   launching kernel\n");
   kernel<<<dimGrid, dimBlock>>>(positions, width, height, t);
-  fprintf(stdout, "   exiting kernel\n");
+  //fprintf(stdout, "   exiting kernel\n");
 }
 
 // Runs all CUDA related functions
 __host__ void runCUDA(struct cudaGraphicsResource** vbo_resource) {
-  fprintf(stdout, "   running cuda\n");
+  //fprintf(stdout, "   running cuda\n");
   // Map VBO to GL with CUDA
   float4* positions;
   // Map resource into GPU memory
@@ -86,14 +85,16 @@ __host__ void runCUDA(struct cudaGraphicsResource** vbo_resource) {
   checkCudaErrors( cudaGraphicsResourceGetMappedPointer((void **)&positions,
 		  &num_bytes,
 		  *vbo_resource) );
-  printf("   CUDA mapped VBO: May access %ld bytes\n", num_bytes);
+  //printf("   CUDA mapped VBO: May access %ld bytes\n", num_bytes);
   // Launch kernel with pointer to mapped resource
   launchKernel(positions, mesh_width, mesh_height, sim_time);
   cudaDeviceSynchronize(); // Let all threads syncronize and complete
   // Unmapping Buffer sends resource back to OpenGL accessible memory
-  fprintf(stdout, "   unmapping buffer\n");
+  //fprintf(stdout, "   unmapping buffer\n");
   checkCudaErrors( cudaGraphicsUnmapResources(1, vbo_resource, 0) );
-  //fprintf(stdout, "     x:%f  y:%f  z:%f w:%f\n", &positions[10].x, &positions[10].y, &positions[10].z, &positions[10].w);
+  /*for (int i = 0; i < mesh_width * mesh_height; i++) {
+    fprintf(stdout, "     x:%f  y:%f  z:%f w:%f\n", &positions[i].x, &positions[i].y, &positions[i].z, &positions[i].w);
+  }*/
 }
 
 __host__ void createVBO(GLuint *vbo, struct cudaGraphicsResource **vbo_res, unsigned int vbo_res_flags) {
@@ -156,8 +157,8 @@ __host__ void Render() {
   glBindBuffer(GL_ARRAY_BUFFER, positionsVBO);
   glVertexPointer(4, GL_FLOAT, 0, 0);
   glEnableClientState(GL_VERTEX_ARRAY);
-  glColor3f(1.0f, 1.0f, 0.0f);
-  fprintf(stdout, "   drawing vertices\n");
+  glColor3f(0.0f, 1.0f, 0.0f);
+  //fprintf(stdout, "   drawing vertices\n");
   glDrawArrays(GL_POINTS, 0, mesh_width * mesh_height); // Rendering happens here
   glDisableClientState(GL_VERTEX_ARRAY);
 
@@ -166,7 +167,7 @@ __host__ void Render() {
 
   // Increment Time
   sim_time += 0.01f;
-  fprintf(stdout, "   simtime:%f\n", sim_time);
+  //fprintf(stdout, "   simtime:%f\n", sim_time);
 }
 
 // Controls for simulation
@@ -202,7 +203,7 @@ __host__ void GLInit(int argc, char* argv[]) {
   fprintf(stdout, "   initializing gl\n");
   // Create Window
   glutInit(&argc, argv);
-  glutInitDisplayMode( GLUT_DOUBLE | GLUT_RGBA	 | GLUT_DEPTH );
+  glutInitDisplayMode( GLUT_DOUBLE | GLUT_RGBA );
   glutInitWindowSize(window_width, window_height);
   glutInitWindowPosition(0, 0);
   glutCreateWindow("cuda-boids");
@@ -211,7 +212,7 @@ __host__ void GLInit(int argc, char* argv[]) {
   glutReshapeFunc(windowResize);
   glutDisplayFunc(Render);
   glutIdleFunc(idleSim);
-  glutKeyboardFunc(Keyboard);
+  glutSpecialFunc(Keyboard);
 
   // Allow Depth and Colors
   glEnable(GL_DEPTH_TEST);
@@ -225,7 +226,7 @@ __host__ void GLInit(int argc, char* argv[]) {
   glViewport(0, 0, window_width, window_height);
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
-  gluPerspective(60.0, (double)mesh_width / (double)mesh_height, 1.0, 200.0);
+  gluPerspective(60.0, (GLfloat)mesh_width / (GLfloat)mesh_height, 0.1, 10.0);
 }
 
 __host__ void printDeviceProps() {
