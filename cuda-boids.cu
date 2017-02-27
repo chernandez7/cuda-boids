@@ -88,24 +88,34 @@ __host__ void runCUDA(struct cudaGraphicsResource** vbo_resource) {
 		  *vbo_resource) );
   // Launch kernel with pointer to mapped resource
   launchKernel(positions, mesh_width, mesh_height, sim_time);
+  cudaDeviceSynchronize(); // Let all threads syncronize and complete
   // Unmapping Buffer sends resource back to OpenGL accessible memory
   fprintf(stdout, "   unmapping buffer\n");
   checkCudaErrors( cudaGraphicsUnmapResources(1, vbo_resource, 0) );
-  fprintf(stdout, "     x:%f  y:%f  z:%f w:%f\n", &positions[10].x, &positions[10].y, &positions[10].z, &positions[10].w);
+  //fprintf(stdout, "     x:%f  y:%f  z:%f w:%f\n", &positions[10].x, &positions[10].y, &positions[10].z, &positions[10].w);
 }
 
 __host__ void createVBO(GLuint *vbo, struct cudaGraphicsResource **vbo_res, unsigned int vbo_res_flags) {
   fprintf(stdout, "   creating vbo\n");
-  assert(vbo);
+  assert(vbo); // Check vbo exists
   // Create vertex buffer object
-  glGenBuffers(1, vbo);
+  glGenBuffers(1,	// Amount of buffers
+		  vbo	// Array to store
+		  );
   // Bind pointer to buffer as an GL_ARRAY_BUFFER type
-  glBindBuffer(GL_ARRAY_BUFFER, *vbo);
-  unsigned int size = mesh_width * mesh_height * 4 * sizeof(float); // Size of allocated memory
+  glBindBuffer(GL_ARRAY_BUFFER,	// Connect data to GL_ARRAY_BUFFER 
+		  		// (Note: Only one link to a buffer at a time)
+		  *vbo		// Data to be connected
+		  );
+  unsigned int size = mesh_width * mesh_height * 4 * sizeof(float); // Mesh * 4 float object (X, Y, Z, W)
   // Add actual data to GL Buffer 
-  glBufferData(GL_ARRAY_BUFFER, size, 0, GL_DYNAMIC_DRAW);
+  glBufferData(GL_ARRAY_BUFFER, 	// Which buffer to allocate memory for
+		  size, 		// Size of buffer
+		  0, 			// Data to store in buffer (if 0/NULL, will be added later)
+		  GL_DYNAMIC_DRAW	// Flag to use for rendering and modifications
+		  );
 
-  // Unbind Buffer
+  // Unbind Buffer to remove link
   glBindBuffer(GL_ARRAY_BUFFER, 0);
 
   // Register VBO to CUDA memory
