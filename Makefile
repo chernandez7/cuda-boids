@@ -5,7 +5,7 @@ NVCC     ?= nvcc
 #CUDA_HOME?= $(TACC_CUDA_DIR)
 CUDA_HOME?= /Developer/NVIDIA/CUDA-8.0/
 NVFLAGS  = -I$(CUDA_HOME)include -I$(CUDA_HOME)samples/common/inc --ptxas-options="-v" -gencode=arch=compute_35,code=\"sm_35,compute_35\"
-CXXFLAGS = -O3 -I. -I$(COMMON) $(DBG)
+CXXFLAGS = -O3 -I. -I$(COMMON) $(DBG) -g -G
 
 EXEC = main
 

@@ -34,14 +34,14 @@ GLuint displayImage;
 double rX = 0.0;
 // Rotation of Y-axis camera perspective
 double rY = 0.0;
-int window_width = 1000;
-int window_height = 1000;
+int window_width = 800;
+int window_height = 800;
 int timeSinceLastFrame;
 int mouse_old_x, mouse_old_y;
 int nBoids = 0;
 float viewPhi = 0;
 float viewTheta = 0;
-float3 seekTarget = make_float3(0, 0, 0);
+float3 seekTarget;
 
 int main(int argc, char* argv[]);
 void printDeviceProps();

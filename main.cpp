@@ -35,6 +35,7 @@ int main(int argc, char* argv[]) {
   checkCudaErrors( cudaGLRegisterBufferObject( positionVBO ) );
   checkCudaErrors( cudaGLRegisterBufferObject( velocityVBO ) );
 
+  // CUDA Init
   initCuda(nBoids);
 
   // Start GLUT Loop
@@ -62,39 +63,43 @@ void printDeviceProps() {
 
 __host__
 void Init(int argc, char* argv[]) {
-
+  fprintf(stdout, "   Initalizing application.\n");
   // Print out GPU Details
   printDeviceProps();
 
   // Create Window
   glutInit(&argc, argv);
-  glutInitDisplayMode( GLUT_DOUBLE | GLUT_RGBA );
+  glutInitDisplayMode( GLUT_DOUBLE | GLUT_RGBA | GLUT_ALPHA );
   glutInitWindowSize(window_width, window_height);
   glutInitWindowPosition(0, 0);
   glutCreateWindow("cuda-boids");
 
   timeSinceLastFrame = glutGet(GLUT_ELAPSED_TIME);
 
+  // For mouse location
+  seekTarget = make_float3(0.0, 0.0, 0.0);
+
   // Set GLUT functions for simulation
   glutReshapeFunc(windowResize);
   glutDisplayFunc(Render);
-  glutIdleFunc(idleSim);
+  //glutIdleFunc(idleSim);
   glutKeyboardFunc(Keyboard);
-  glutMotionFunc(mouseMotion);
+  glutPassiveMotionFunc(mouseMotion);
 
   // Allow Depth and Colors
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_COLOR_MATERIAL);
 
   // Set the color of the background
-  glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+  glClearColor(0.8f, 0.8f, 0.8f, 1.0f);
   glDisable(GL_DEPTH_TEST);
+  glDisable(GL_COLOR_MATERIAL);
 
   // Set perspective mode
   glViewport(0, 0, window_width, window_height);
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
-  //gluPerspective(60.0, (double)window_width / (double)window_height, 0.1, 10.0);
+  gluPerspective(60.0, (double)window_width / (double)window_height, 0.1, 10.0);
 
   /*
   // Init GLEW
@@ -111,39 +116,50 @@ void Init(int argc, char* argv[]) {
 
 __host__
 void initVAO(void) {
+  fprintf(stdout, "   Creating Vertex Array Objects.\n");
+
   GLfloat *bodies     = new GLfloat[4*(nBoids)];
   GLfloat *velocities = new GLfloat[3*(nBoids)];
   GLuint *bindices    = new GLuint [nBoids];
 
-    for(int i = 0; i < nBoids; i++) {
-      bodies[4*i+0] = 0.0f;
-      bodies[4*i+1] = 0.0f;
-      bodies[4*i+2] = 0.0f;
-      bodies[4*i+3] = 1.0f;
+  // Initializing all positions and vel's at 0
+  for(int i = 0; i < nBoids; i++) {
+    bodies[4*i+0] = 0.0f;
+    bodies[4*i+1] = 0.0f;
+    bodies[4*i+2] = 0.0f;
+    bodies[4*i+3] = 1.0f;
 
-      velocities[3*i+0] = 0.0f;
-      velocities[3*i+1] = 0.0f;
-      velocities[3*i+2] = 0.0f;
+    velocities[3*i+0] = 0.0f;
+    velocities[3*i+1] = 0.0f;
+    velocities[3*i+2] = 0.0f;
 
-      bindices[i] = i;
-    }
+    bindices[i] = i;
+  }
 
+  // Generate buffers for VBO
   glGenBuffers(1, &positionVBO);
   glGenBuffers(1, &velocityVBO);
   glGenBuffers(1, &IBO);
 
+  fprintf(stdout, "   Binding VBO to GL buffers.\n");
+  // Assign VBO to buffer
   glBindBuffer(GL_ARRAY_BUFFER, positionVBO);
+  // Add bodies and size to buffer
   glBufferData(GL_ARRAY_BUFFER, 4*(nBoids)*sizeof(GLfloat), bodies, GL_DYNAMIC_DRAW);
 
+  // Same for vel
   glBindBuffer(GL_ARRAY_BUFFER, velocityVBO);
   glBufferData(GL_ARRAY_BUFFER, 3*(nBoids)*sizeof(GLfloat), velocities, GL_DYNAMIC_DRAW);
 
+  // Same for IBO
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO);
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, (nBoids)*sizeof(GLuint), bindices, GL_STATIC_DRAW);
 
+  // Unbind buffers
   glBindBuffer(GL_ARRAY_BUFFER, 0);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
+  // No need for these anymore since in buffers
   delete[] bodies;
   delete[] bindices;
   delete[] velocities;
@@ -168,14 +184,19 @@ void windowResize(int height, int width) {
 __host__
 void Keyboard(unsigned char key, int x, int y) {
   if (key == GLUT_KEY_RIGHT) {
+    fprintf(stdout, "   Moving Y-axis up.\n");
     rY += 15;
   } else if (key == GLUT_KEY_LEFT) {
+    fprintf(stdout, "   Moving Y-axis down.\n");
     rY -= 15;
   } else if (key == GLUT_KEY_DOWN) {
+    fprintf(stdout, "   Moving X-axis left.\n");
     rX -= 15;
   } else if (key == GLUT_KEY_UP) {
+    fprintf(stdout, "   Moving X-axis right.\n");
     rX += 15;
   } else if (key == 27) { // Escape
+    fprintf(stdout, "   Exiting application.\n");
     exit(1);
   }
 
@@ -195,6 +216,7 @@ int frame = 0;
 // Main render function for GLUT which loops until exit
 __host__
 void Render() {
+  //fprintf(stdout, "   Entering Render Loop.\n");
 
   static float fps = 0;
   frame++;
@@ -211,7 +233,7 @@ void Render() {
   runCUDA();
 
   char title[100];
-  sprintf( title, "cuda-boids [%d boids] [%0.2f fps] [%0.2fms] ", nBoids, fps, executionTime);
+  sprintf( title, "[%d boids] [%0.2f fps] [%0.2f, %0.2f, %0.2f mouse] [%0.2fms]", nBoids, fps, seekTarget.x, seekTarget.y, seekTarget.z, executionTime);
   glutSetWindowTitle(title);
 
   // Clear screen
@@ -221,6 +243,7 @@ void Render() {
   glMatrixMode(GL_MODELVIEW);
   glLoadIdentity();
 
+  //fprintf(stdout, "   Drawing Vertices.\n");
   // Render from VBO
   glEnableVertexAttribArray(0);
   glBindBuffer(GL_ARRAY_BUFFER, positionVBO);
@@ -253,6 +276,7 @@ void runCUDA() {
 
   float* dptrvert = NULL;
   float* velptr = NULL;
+  //fprintf(stdout, "   Mapping GL buffer.\n");
   checkCudaErrors( cudaGLMapBufferObject((void**)&dptrvert, positionVBO) );
   checkCudaErrors( cudaGLMapBufferObject((void**)&velptr, velocityVBO) );
 
@@ -275,7 +299,6 @@ void mouseMotion(int x, int y) {
   seekTarget.x = 400.0f*sin(viewTheta)*sin(viewPhi);
   seekTarget.y = 400.0f*cos(viewTheta);
   seekTarget.z = 400.0f*sin(viewTheta)*cos(viewPhi);
-
 
   mouse_old_x = x;
   mouse_old_y = y;
