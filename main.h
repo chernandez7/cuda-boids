@@ -41,7 +41,7 @@ int mouse_old_x, mouse_old_y;
 int nBoids = 0;
 float viewPhi = 0;
 float viewTheta = 0;
-float3 seekTarget;
+float3 seekTarget = make_float3(0, 0, 0);
 
 int main(int argc, char* argv[]);
 void printDeviceProps();
@@ -52,7 +52,7 @@ void windowResize(int height, int width);
 void Keyboard(unsigned char key, int x, int y);
 void help();
 void Render();
-void runCUDA(int n);
+void runCUDA();
 void mouseMotion(int x, int y);
 
 #endif

@@ -99,9 +99,9 @@ void generateRandomPosArray(int time, int n, float4* arr, float mass) {
   if(index < n) {
     curand_init(0, 0, 0, &state);
 
-    arr[index].x = curand(&state) % 2;
-    arr[index].y = curand(&state) % 2;
-    arr[index].z = curand(&state) % 2;
+    arr[index].x = curand(&state) % 500;
+    arr[index].y = curand(&state) % 500;
+    arr[index].z = curand(&state) % 500;
     arr[index].w = 1.0f;
   }
 }
@@ -251,3 +251,4 @@ void cudaUpdateVBO(int n, float* vbodptr, float* velptr) {
 
   sendToVBO<<<fullBlocksPerGrid, BlockSize>>>(n, dev_pos, dev_vel, vbodptr, velptr, scene_scale);
 }
+

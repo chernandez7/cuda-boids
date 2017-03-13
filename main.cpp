@@ -94,7 +94,7 @@ void Init(int argc, char* argv[]) {
   glViewport(0, 0, window_width, window_height);
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
-  gluPerspective(60.0, (double)window_width / (double)window_height, 0.1, 10.0);
+  //gluPerspective(60.0, (double)window_width / (double)window_height, 0.1, 10.0);
 
   /*
   // Init GLEW
@@ -112,7 +112,7 @@ void Init(int argc, char* argv[]) {
 __host__
 void initVAO(void) {
   GLfloat *bodies     = new GLfloat[4*(nBoids)];
-	GLfloat *velocities = new GLfloat[3*(nBoids)];
+  GLfloat *velocities = new GLfloat[3*(nBoids)];
   GLuint *bindices    = new GLuint [nBoids];
 
     for(int i = 0; i < nBoids; i++) {
@@ -121,22 +121,22 @@ void initVAO(void) {
       bodies[4*i+2] = 0.0f;
       bodies[4*i+3] = 1.0f;
 
-		  velocities[3*i+0] = 0.0f;
-		  velocities[3*i+1] = 0.0f;
-		  velocities[3*i+2] = 0.0f;
+      velocities[3*i+0] = 0.0f;
+      velocities[3*i+1] = 0.0f;
+      velocities[3*i+2] = 0.0f;
 
       bindices[i] = i;
     }
 
   glGenBuffers(1, &positionVBO);
-	glGenBuffers(1, &velocityVBO);
+  glGenBuffers(1, &velocityVBO);
   glGenBuffers(1, &IBO);
 
   glBindBuffer(GL_ARRAY_BUFFER, positionVBO);
   glBufferData(GL_ARRAY_BUFFER, 4*(nBoids)*sizeof(GLfloat), bodies, GL_DYNAMIC_DRAW);
 
-	glBindBuffer(GL_ARRAY_BUFFER, velocityVBO);
-	glBufferData(GL_ARRAY_BUFFER, 3*(nBoids)*sizeof(GLfloat), velocities, GL_DYNAMIC_DRAW);
+  glBindBuffer(GL_ARRAY_BUFFER, velocityVBO);
+  glBufferData(GL_ARRAY_BUFFER, 3*(nBoids)*sizeof(GLfloat), velocities, GL_DYNAMIC_DRAW);
 
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO);
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, (nBoids)*sizeof(GLuint), bindices, GL_STATIC_DRAW);
@@ -146,7 +146,7 @@ void initVAO(void) {
 
   delete[] bodies;
   delete[] bindices;
-	delete[] velocities;
+  delete[] velocities;
 }
 
 // Idle function for GLUT, called when nothing is happening
@@ -205,30 +205,30 @@ void Render() {
     frame = 0;
   }
   float executionTime = glutGet(GLUT_ELAPSED_TIME) - timeSinceLastFrame;
-	timeSinceLastFrame = glutGet(GLUT_ELAPSED_TIME);
+  timeSinceLastFrame = glutGet(GLUT_ELAPSED_TIME);
 
   // Launch Kernel
-  runCUDA(nBoids);
+  runCUDA();
 
   char title[100];
-	sprintf( title, "cuda-boids [%0.2f fps] [%0.2fms] ", fps, executionTime);
+  sprintf( title, "cuda-boids [%d boids] [%0.2f fps] [%0.2fms] ", nBoids, fps, executionTime);
   glutSetWindowTitle(title);
 
   // Clear screen
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   // Set View Matrix
-  //glMatrixMode(GL_MODELVIEW);
-  //glLoadIdentity();
+  glMatrixMode(GL_MODELVIEW);
+  glLoadIdentity();
 
   // Render from VBO
   glEnableVertexAttribArray(0);
   glBindBuffer(GL_ARRAY_BUFFER, positionVBO);
   glVertexAttribPointer((GLuint)0, 4, GL_FLOAT, GL_FALSE, 0, 0);
 
-	glEnableVertexAttribArray(1);
-	glBindBuffer(GL_ARRAY_BUFFER, velocityVBO);
-	glVertexAttribPointer((GLuint)1, 3, GL_FLOAT, GL_FALSE, 0, 0);
+  glEnableVertexAttribArray(1);
+  glBindBuffer(GL_ARRAY_BUFFER, velocityVBO);
+  glVertexAttribPointer((GLuint)1, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO);
 
@@ -249,35 +249,34 @@ void Render() {
 
 // Runs all CUDA related functions
 __host__
-void runCUDA(int n) {
+void runCUDA() {
 
   float* dptrvert = NULL;
-	float* velptr = NULL;
+  float* velptr = NULL;
   checkCudaErrors( cudaGLMapBufferObject((void**)&dptrvert, positionVBO) );
-	checkCudaErrors( cudaGLMapBufferObject((void**)&velptr, velocityVBO) );
+  checkCudaErrors( cudaGLMapBufferObject((void**)&velptr, velocityVBO) );
 
-  cudaFlockingUpdateWrapper(n, 0.5, seekTarget);
-  cudaUpdateVBO(n, dptrvert, velptr);
+  cudaFlockingUpdateWrapper(nBoids, 0.5, seekTarget);
+  cudaUpdateVBO(nBoids, dptrvert, velptr);
 
   // unmap buffer object
   checkCudaErrors( cudaGLUnmapBufferObject(positionVBO) );
-	checkCudaErrors( cudaGLUnmapBufferObject(velocityVBO) );
+  checkCudaErrors( cudaGLUnmapBufferObject(velocityVBO) );
 }
 
 __host__
 void mouseMotion(int x, int y) {
-	float dx, dy;
-	dx = (float)(x - mouse_old_x);
-	dy = (float)(y - mouse_old_y);
+  float dx, dy;
+  dx = (float)(x - mouse_old_x);
+  dy = (float)(y - mouse_old_y);
+
+  viewPhi   += 0.005f*dx;
+  viewTheta += 0.005f*dy;
+  seekTarget.x = 400.0f*sin(viewTheta)*sin(viewPhi);
+  seekTarget.y = 400.0f*cos(viewTheta);
+  seekTarget.z = 400.0f*sin(viewTheta)*cos(viewPhi);
 
 
-	viewPhi   += 0.005f*dx;
-	viewTheta += 0.005f*dy;
-	seekTarget.x = 400.0f*sin(viewTheta)*sin(viewPhi);
-	seekTarget.y = 400.0f*cos(viewTheta);
-	seekTarget.z = 400.0f*sin(viewTheta)*cos(viewPhi);
-
-
-	mouse_old_x = x;
-	mouse_old_y = y;
+  mouse_old_x = x;
+  mouse_old_y = y;
 }
