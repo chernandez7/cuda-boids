@@ -27,6 +27,7 @@
 
 GLuint positionVBO = (GLuint)NULL;
 GLuint velocityVBO = (GLuint)NULL;
+GLuint accelerationVBO = (GLuint)NULL;
 GLuint IBO = (GLuint)NULL;
 GLuint displayImage;
 

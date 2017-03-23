@@ -34,6 +34,7 @@ int main(int argc, char* argv[]) {
   // Register VBO
   checkCudaErrors( cudaGLRegisterBufferObject( positionVBO ) );
   checkCudaErrors( cudaGLRegisterBufferObject( velocityVBO ) );
+  checkCudaErrors( cudaGLRegisterBufferObject( accelerationVBO ) );
 
   // CUDA Init
   initCuda(nBoids);
@@ -91,7 +92,7 @@ void Init(int argc, char* argv[]) {
   glEnable(GL_COLOR_MATERIAL);
 
   // Set the color of the background
-  glClearColor(0.8f, 0.8f, 0.8f, 1.0f);
+  glClearColor(0.0f, 0.1f, 0.0f, 0.0f);
   glDisable(GL_DEPTH_TEST);
   glDisable(GL_COLOR_MATERIAL);
 
@@ -120,6 +121,7 @@ void initVAO(void) {
 
   GLfloat *bodies     = new GLfloat[4*(nBoids)];
   GLfloat *velocities = new GLfloat[3*(nBoids)];
+  GLfloat *accelerations = new GLfloat[3*(nBoids)];
   GLuint *bindices    = new GLuint [nBoids];
 
   // Initializing all positions and vel's at 0
@@ -133,12 +135,17 @@ void initVAO(void) {
     velocities[3*i+1] = 0.0f;
     velocities[3*i+2] = 0.0f;
 
+    accelerations[3*i+0] = 0.0f;
+    accelerations[3*i+1] = 0.0f;
+    accelerations[3*i+2] = 0.0f;
+
     bindices[i] = i;
   }
 
   // Generate buffers for VBO
   glGenBuffers(1, &positionVBO);
   glGenBuffers(1, &velocityVBO);
+  glGenBuffers(1, &accelerationVBO);
   glGenBuffers(1, &IBO);
 
   fprintf(stdout, "   Binding VBO to GL buffers.\n");
@@ -150,6 +157,10 @@ void initVAO(void) {
   // Same for vel
   glBindBuffer(GL_ARRAY_BUFFER, velocityVBO);
   glBufferData(GL_ARRAY_BUFFER, 3*(nBoids)*sizeof(GLfloat), velocities, GL_DYNAMIC_DRAW);
+
+  // Same for acc
+  glBindBuffer(GL_ARRAY_BUFFER, accelerationVBO);
+  glBufferData(GL_ARRAY_BUFFER, 3*(nBoids)*sizeof(GLfloat), accelerations, GL_DYNAMIC_DRAW);
 
   // Same for IBO
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO);
@@ -163,6 +174,7 @@ void initVAO(void) {
   delete[] bodies;
   delete[] bindices;
   delete[] velocities;
+  delete[] accelerations;
 }
 
 // Idle function for GLUT, called when nothing is happening
@@ -276,16 +288,19 @@ void runCUDA() {
 
   float* dptrvert = NULL;
   float* velptr = NULL;
+  float* accptr = NULL;
   //fprintf(stdout, "   Mapping GL buffer.\n");
   checkCudaErrors( cudaGLMapBufferObject((void**)&dptrvert, positionVBO) );
   checkCudaErrors( cudaGLMapBufferObject((void**)&velptr, velocityVBO) );
+  checkCudaErrors( cudaGLMapBufferObject((void**)&accptr, accelerationVBO) );
 
-  cudaFlockingUpdateWrapper(nBoids, 0.5, seekTarget);
-  cudaUpdateVBO(nBoids, dptrvert, velptr);
+  flock(nBoids, window_width, window_height, seekTarget);
+  cudaUpdateVBO(nBoids, dptrvert, velptr, accptr);
 
   // unmap buffer object
   checkCudaErrors( cudaGLUnmapBufferObject(positionVBO) );
   checkCudaErrors( cudaGLUnmapBufferObject(velocityVBO) );
+  checkCudaErrors( cudaGLUnmapBufferObject(accelerationVBO) );
 }
 
 __host__

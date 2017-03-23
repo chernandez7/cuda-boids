@@ -16,7 +16,7 @@
 #define BlockSize 64
 
 void initCuda(int n);
-void cudaFlockingUpdateWrapper(int n, float dt, float3 target);
-void cudaUpdateVBO(int n, float *vbodptr, float *velptr);
+void flock(int n, int window_width, int window_height, float3 target);
+void cudaUpdateVBO(int n, float* vbodptr, float* velptr, float* accptr);
 
 #endif
