@@ -265,9 +265,13 @@ void Render() {
   glBindBuffer(GL_ARRAY_BUFFER, velocityVBO);
   glVertexAttribPointer((GLuint)1, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
+  glEnableVertexAttribArray(2);
+  glBindBuffer(GL_ARRAY_BUFFER, accelerationVBO);
+  glVertexAttribPointer((GLuint)2, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO);
 
-  glPointSize(4.0f);
+  glPointSize(10.0f);
   glDrawElements(GL_POINTS, nBoids, GL_UNSIGNED_INT, 0);
 
   glDisableVertexAttribArray(0);
