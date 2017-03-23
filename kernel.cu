@@ -289,7 +289,7 @@ float3 CohesionRule(int n, float4* pos, float3* vel) {
       // Get distance between you and neighbor
       float distanceToNeighbor = distanceFormula(myPosition, theirPos);
       // If in range add their pos to sum
-      if (numberOfNeighbors > 0 && numberOfNeighbors < neighborDistance) {
+      if (distanceToNeighbor > 0 && distanceToNeighbor < neighborDistance) {
         add2Vectors(sum, theirPos);
   			numberOfNeighbors++;
   		}
