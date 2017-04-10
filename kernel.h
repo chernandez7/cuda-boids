@@ -1,7 +1,7 @@
-
 #ifndef KERNEL_H
 #define KERNEL_H
 
+#include <Windows.h>
 #include <stdio.h>
 #include <cmath>
 
@@ -13,7 +13,7 @@
 #include <curand.h> // rand function
 #include <curand_kernel.h>
 
-#define BlockSize 64
+#define BlockSize 128
 
 void initCuda(int n);
 void flock(int n, int window_width, int window_height, float3 target);

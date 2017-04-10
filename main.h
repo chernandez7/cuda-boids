@@ -1,11 +1,12 @@
-
 #ifndef MAIN_H
 #define MAIN_H
 
 // C HEADERS
+#include <Windows.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <strings.h>
+#include <iostream>
+//#include <strings.h>
 #include <ctype.h>
 #include <assert.h>
 #include <vector>
@@ -14,8 +15,12 @@
 #include <OpenGL/gl.h>
 #include <GLUT/glut.h>
 #else
+#include <GL/glew.h>
 #include <GL/glut.h>
-#include <GL/gl.h>
+#include <GLFW/glfw3.h>
+#include "glslUtility.h"
+#include "glm/glm.hpp"
+#include "glm/gtc/matrix_transform.hpp"
 #endif
 // CUDA
 #include <cuda_runtime.h>
@@ -23,20 +28,33 @@
 #include <helper_cuda.h>
 #include <helper_cuda_gl.h> // checkCudaErrors()
 // COMMON
-#include <aligned_allocator.h>
+//#include <aligned_allocator.h>
 
+GLuint positionLocation = 1;
+GLuint velocityLocation = 2;
+GLuint accelerationLocation = 3;
 GLuint positionVBO = (GLuint)NULL;
 GLuint velocityVBO = (GLuint)NULL;
 GLuint accelerationVBO = (GLuint)NULL;
 GLuint IBO = (GLuint)NULL;
 GLuint displayImage;
 
+GLuint program[2];
+const unsigned int PASS_THROUGH = 1;
+const char *attributeLocations[] = { "position", "velocity", "acceleration" };
+glm::mat4 projection;
+glm::mat4 view;
+glm::vec3 cameraPosition(3.5, 3.5, 3);
+float fovy = 70.0f;
+float zNear = 0.10;
+float zFar = 100.0;
+
 // Rotation of X-axis camera perspective
 double rX = 0.0;
 // Rotation of Y-axis camera perspective
 double rY = 0.0;
-int window_width = 800;
-int window_height = 800;
+int window_width = 600;
+int window_height = 600;
 int timeSinceLastFrame;
 int mouse_old_x, mouse_old_y;
 int nBoids = 0;
@@ -46,14 +64,17 @@ float3 seekTarget;
 
 int main(int argc, char* argv[]);
 void printDeviceProps();
-void Init(int argc, char* argv[]);
+
 void initVAO();
 void idleSim();
 void windowResize(int height, int width);
 void Keyboard(unsigned char key, int x, int y);
 void help();
 void Render();
-void runCUDA();
 void mouseMotion(int x, int y);
+void Init(int argc, char* argv[]);
+void runCUDA();
+void initShaders(GLuint * program);
+
 
 #endif
