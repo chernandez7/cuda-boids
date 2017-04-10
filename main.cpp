@@ -271,14 +271,21 @@ void Render() {
 
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO);
 
-  glPointSize(10.0f);
+  glPointSize(4.0f);
   glDrawElements(GL_POINTS, nBoids, GL_UNSIGNED_INT, 0);
 
   glDisableVertexAttribArray(0);
 
   // Perspective modifications
-  glRotatef(rX, 1.0, 0.0, 0.0);
-  glRotatef(rY, 0.0, 1.0, 0.0);
+  //glRotatef(rX, 1.0, 0.0, 0.0);
+  //glRotatef(rY, 0.0, 1.0, 0.0);
+
+glBegin(GL_QUADS);
+	glTexCoord2f(0.0f, 1.0f); glVertex3f(0.0f, 0.0f, 0.0f);
+		glTexCoord2f(0.0f, 0.0f); glVertex3f(0.0f, 1.0f, 0.0f);
+			glTexCoord2f(1.0f, 0.0f); glVertex3f(1.0f, 1.0f, 0.0f);
+				glTexCoord2f(1.0f, 1.0f); glVertex3f(1.0f, 0.0f, 0.0f);
+					glEnd();
 
   // Switch Buffers to show rendered
   glutPostRedisplay();
