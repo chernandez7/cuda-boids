@@ -4,18 +4,29 @@
 
 dim3 threadsPerBlock(BlockSize);
 
-const float boidMass = 1.0;
-const float scene_scale = 4e1;
-const __device__ float maxSpeed = 3.0;
+const float boidMass = 1.0f;
+const float scene_scale = 4e2;
+const __device__ float maxSpeed = 10.0f;
+
 const __device__ float sep_dist = 100000;
-const __device__ float ali_dist = 100;
-const __device__ float coh_dist = 100000;
+const __device__ float ali_dist = 10000;
+const __device__ float coh_dist = 1000;
+
+const __device__ float sep_weight = 3.0f;
+const __device__ float ali_weight = 2.0f;
+const __device__ float coh_weight = 1.0f;
 
 float4* dev_pos;
 float3* dev_vel;
 float3* dev_acc;
 float3* dev_results;
 curandState_t* dev_states;
+
+/*****************************************************************
+*
+*	Vector Functions
+*
+****************************************************************/
 
 __device__
 float distanceFormula(float3 myPos, float3 theirPos) {
@@ -75,12 +86,12 @@ float magnitudeOfVector(float3 vector) {
 
 __device__
 float3 normalizeVector(float3 vector) {
-	float3 temp = make_float3(0, 0, 0);
-	float magnitude = magnitudeOfVector(vector);
+	float3 temp = make_float3(vector.x, vector.y, vector.z);
+	float magnitude = magnitudeOfVector(temp);
 	if (magnitude > 0) {
-		temp.x = vector.x / magnitude;
-		temp.y = vector.y / magnitude;
-		temp.z = vector.z / magnitude;
+		temp.x /= magnitude;
+		temp.y /= magnitude;
+		temp.z /= magnitude;
 	}
 	return temp;
 }
@@ -101,43 +112,11 @@ float3 RNG(int nBoids, curandState_t* state, int max) {
 	return temp;
 }
 
-__global__
-void setupRNG(curandState_t* state, int seed) {
-	int index = (blockIdx.x * blockDim.x) + threadIdx.x;
-	/* Each thread gets same seed, a different sequence number,
-	no offset */
-	curand_init(seed, index, 0, &state[index]);
-
-}
-
-__global__
-void generateRandomPosArray(int n, curandState_t* states, float4* arr, float mass, float scale) {
-	int index = (blockIdx.x * blockDim.x) + threadIdx.x;
-
-	if (index < n) {
-
-		float3 random = RNG(n, states, 1000);
-
-		arr[index].x = random.x * scale;
-		arr[index].y = random.y * scale;
-		arr[index].z = random.z * scale;
-
-		arr[index].w = mass;
-	}
-}
-
-__global__
-void generateRandomArray(int n, curandState_t* states, float3* arr) {
-	int index = (blockIdx.x * blockDim.x) + threadIdx.x;
-
-	if (index < n) {
-		float3 random = RNG(n, states, 50);
-
-		arr[index].x = random.x;
-		arr[index].y = random.y;
-		arr[index].z = random.z;
-	}
-}
+/*****************************************************************
+*
+*	Bird-oid Rules
+*
+****************************************************************/
 
 __device__
 float3 SeparationRule(int n, float4* pos, float3* vel, float3 target) {
@@ -153,8 +132,8 @@ float3 SeparationRule(int n, float4* pos, float3* vel, float3 target) {
 
 		for (int i = 0; i < n; i++) {
 			float3 theirPos = make_float3(pos[i].x, pos[i].y, pos[i].z);
-			float distanceToNeighbor = distanceFormula(myPosition, theirPos);
-			//float distanceToNeighbor = distanceFormula(myPosition, target);
+			float distanceToNeighbor = distanceFormula(myPosition, theirPos); // Flock
+			//float distanceToNeighbor = distanceFormula(myPosition, target); // Mouse
 			// Add the difference of positions to steer force
 			if (distanceToNeighbor > 0 && distanceToNeighbor < neighborDistance) {
 				// calc and normalize delta
@@ -208,7 +187,7 @@ float3 SeparationRule(int n, float4* pos, float3* vel, float3 target) {
 		}
 		return steer;
 	}
-	else {
+	else { // index out of range
 		return make_float3(0, 0, 0);
 	}
 }
@@ -311,8 +290,8 @@ float3 CohesionRule(int n, float4* pos, float3* vel) {
 			sum.y /= numberOfNeighbors;
 			sum.z /= numberOfNeighbors;
 
-			//return seek(sum, vel[index]);
 			float3 desired = make_float3(0, 0, 0);
+
 			//sub2Vectors(desired, sum);
 			desired.x -= sum.x;
 			desired.y -= sum.y;
@@ -326,11 +305,11 @@ float3 CohesionRule(int n, float4* pos, float3* vel) {
 			normalized_desired.z *= maxSpeed;
 
 			// Steering = desired - vel
-			//return limit(0.5, sub2VectorsNew(desired, vel));
 			normalized_desired.x -= vel[index].x;
 			normalized_desired.y -= vel[index].y;
 			normalized_desired.z -= vel[index].z;
 
+			// limit desired vel
 			float size = magnitudeOfVector(normalized_desired);
 			if (size > 0.5) {
 				normalized_desired.x /= size;
@@ -339,13 +318,56 @@ float3 CohesionRule(int n, float4* pos, float3* vel) {
 			}
 			return normalized_desired;
 		}
-		else {
-			// No neighbors nearby
+		else { // No neighbors nearby
 			return make_float3(0, 0, 0);
 		}
 	}
-	else {
+	else { // index out of range
 		return make_float3(0, 0, 0);
+	}
+}
+
+/*****************************************************************
+*
+*	Kernels
+*
+****************************************************************/
+
+__global__
+void setupRNG(curandState_t* state, int seed) {
+	int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+
+	// Each thread gets same seed, a different sequence number
+	curand_init(seed, index, 0, &state[index]);
+}
+
+__global__
+void generateRandomPosArray(int n, curandState_t* states, float4* arr, float mass, float scale) {
+	int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+
+	if (index < n) {
+
+		float3 random = RNG(n, states, 300);
+
+		arr[index].x = random.x * scale;
+		arr[index].y = random.y * scale;
+		arr[index].z = random.z * scale;
+
+		arr[index].w = mass;
+	}
+}
+
+__global__
+void generateRandomArray(int n, curandState_t* states, float3* arr) {
+	int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+
+	if (index < n) {
+
+		float3 random = RNG(n, states, 5);
+
+		arr[index].x = random.x;
+		arr[index].y = random.y;
+		arr[index].z = random.z;
 	}
 }
 
@@ -361,17 +383,17 @@ void flocking(int n, float4* pos, float3* vel, float3* acc, float3 target) {
 		float3 cohesion = CohesionRule(n, pos, vel);
 
 		// Apply Arbitrary Weights
-		separation.x *= 1.5;
-		separation.y *= 1.5;
-		separation.z *= 1.5;
+		separation.x *= sep_weight;
+		separation.y *= sep_weight;
+		separation.z *= sep_weight;
 
-		alignment.x *= 1.0;
-		alignment.y *= 1.0;
-		alignment.z *= 1.0;
+		alignment.x *= ali_weight;
+		alignment.y *= ali_weight;
+		alignment.z *= ali_weight;
 
-		cohesion.x *= 1.0;
-		cohesion.y *= 1.0;
-		cohesion.z *= 1.0;
+		cohesion.x *= coh_weight;
+		cohesion.y *= coh_weight;
+		cohesion.z *= coh_weight;
 
 		// Apply Forces to acc
 		acc[index].x += separation.x;
@@ -393,7 +415,6 @@ void updatePosition(int n, float dt, float4 *pos, float3 *vel, float3 *acc, int 
 	int index = threadIdx.x + (blockIdx.x * blockDim.x);
 	if (index < n) {
 
-		// Done so slow down won't be as abrupt
 		// Multiply acc by scalar dt to not have an instant stop
 		acc[index].x *= dt;
 		acc[index].y *= dt;
@@ -412,6 +433,10 @@ void updatePosition(int n, float dt, float4 *pos, float3 *vel, float3 *acc, int 
 			vel[index].y /= size;
 			vel[index].z /= size;
 		}
+
+		vel[index].x *= maxSpeed;
+		vel[index].y *= maxSpeed;
+		vel[index].z *= maxSpeed;
 
 		/*** EULER METHOD ***
 		pos[index].x += vel[index].x;
@@ -459,10 +484,10 @@ void updatePosition(int n, float dt, float4 *pos, float3 *vel, float3 *acc, int 
 		acc[index].z = 0;
 
 		// Fix positions if particle is off screen
-		if (pos[index].x < 0)				pos[index].x += window_width;
-		if (pos[index].y < 0)				pos[index].y += window_height;
-		if (pos[index].x > window_width)	pos[index].x -= window_width;
-		if (pos[index].y > window_height)	pos[index].y -= window_height;
+		//if (pos[index].x < 0)				pos[index].x += window_width;
+		//if (pos[index].y < 0)				pos[index].y += window_height;
+		//if (pos[index].x > window_width)	pos[index].x -= window_width;
+		//if (pos[index].y > window_height)	pos[index].y -= window_height;
 	}
 }
 
@@ -471,21 +496,21 @@ void sendToVBO(int n, float scale, float4* pos, float3* vel, float3* acc,
 	float* posVBO, float* velVBO, float* accVBO) {
 	int index = threadIdx.x + (blockIdx.x * blockDim.x);
 
-	float divisor = 2.0f / scale;
+	float scalar = 2.0f / scale;
 
 	if (index < n) {
-		posVBO[4 * index + 0] = pos[index].x / divisor;
-		posVBO[4 * index + 1] = pos[index].y / divisor;
-		posVBO[4 * index + 2] = pos[index].z / divisor;
+		posVBO[4 * index + 0] = pos[index].x * scalar;
+		posVBO[4 * index + 1] = pos[index].y * scalar;
+		posVBO[4 * index + 2] = pos[index].z * scalar;
 		posVBO[4 * index + 3] = 1;
 
-		velVBO[3 * index + 0] = vel[index].x / divisor;
-		velVBO[3 * index + 1] = vel[index].y / divisor;
-		velVBO[3 * index + 2] = vel[index].z / divisor;
+		velVBO[3 * index + 0] = vel[index].x * scalar;
+		velVBO[3 * index + 1] = vel[index].y * scalar;
+		velVBO[3 * index + 2] = vel[index].z * scalar;
 
-		accVBO[3 * index + 0] = acc[index].x / divisor;
-		accVBO[3 * index + 1] = acc[index].y / divisor;
-		accVBO[3 * index + 2] = acc[index].z / divisor;
+		accVBO[3 * index + 0] = acc[index].x * scalar;
+		accVBO[3 * index + 1] = acc[index].y * scalar;
+		accVBO[3 * index + 2] = acc[index].z * scalar;
 	}
 }
 
@@ -506,7 +531,6 @@ void initCuda(int n) {
 	cudaMalloc((void**)&dev_acc, n * sizeof(float3));
 
 	cudaMalloc((void **)&dev_results, n * sizeof(float3));
-	//cudaMemset(dev_results, 0, n * sizeof(float));
 	cudaMalloc((void **)&dev_states, n * sizeof(curandState_t));
 
 	// Kernels
@@ -523,7 +547,6 @@ void flock(int n, int window_width, int window_height, float3 target) {
 	//fprintf(stdout, "   Updating Acceleration and position.\n");
 	flocking << <fullBlocksPerGrid, BlockSize >> >(n, dev_pos, dev_vel, dev_acc, target);
 	updatePosition << <fullBlocksPerGrid, BlockSize >> >(n, 0.5, dev_pos, dev_vel, dev_acc, window_width, window_height);
-
 }
 
 __host__

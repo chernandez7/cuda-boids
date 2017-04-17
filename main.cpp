@@ -2,6 +2,12 @@
 #include "main.h"
 #include "kernel.h"
 
+/*****************************************************************
+*
+*	Main
+*
+****************************************************************/
+
 __host__
 int main(int argc, char* argv[]) {
 	/*
@@ -63,6 +69,12 @@ int main(int argc, char* argv[]) {
 	return 0;
 }
 
+/*****************************************************************
+*
+*	OpenGL Init
+*
+****************************************************************/
+
 __host__
 void printDeviceProps() {
 	{
@@ -114,6 +126,22 @@ void Init(int argc, char* argv[]) {
 	seekTarget = make_float3(0.0, 0.0, 0.0);
 
 	initVAO();
+}
+
+void initShaders(GLuint* program) {
+	GLint location;
+
+	program[1] = glslUtility::createProgram("shaders/planetVS.glsl", "shaders/planetGS.glsl", "shaders/planetFS.glsl", attributeLocations, 1);
+	glUseProgram(program[1]);
+
+	if ((location = glGetUniformLocation(program[1], "u_projMatrix")) != -1)
+	{
+		glUniformMatrix4fv(location, 1, GL_FALSE, &projection[0][0]);
+	}
+	if ((location = glGetUniformLocation(program[1], "u_cameraPos")) != -1)
+	{
+		glUniform3fv(location, 1, &cameraPosition[0]);
+	}
 }
 
 __host__
@@ -178,7 +206,63 @@ void initVAO(void) {
 	delete[] accelerations;
 }
 
-// Called when OpenGL Window is resized to handle scaling
+__host__
+void help() {
+	fprintf(stderr, "./boids --help|-h --nboids|-n \n");
+}
+
+/*****************************************************************
+*
+*	CUDA Wrapper
+*
+****************************************************************/
+
+// Runs all CUDA related functions
+__host__
+void runCUDA() {
+
+	float* dptrvert = NULL;
+	float* velptr = NULL;
+	float* accptr = NULL;
+
+	// Map BO to array
+	cudaGLMapBufferObject((void**)&dptrvert, positionVBO);
+	cudaGLMapBufferObject((void**)&velptr, velocityVBO);
+	cudaGLMapBufferObject((void**)&accptr, accelerationVBO);
+
+	// Call wrappers for kernels
+	flock(nBoids, window_width, window_height, seekTarget);
+	cudaUpdateVBO(nBoids, dptrvert, velptr, accptr);
+
+	// Unmap buffer object
+	cudaGLUnmapBufferObject(positionVBO);
+	cudaGLUnmapBufferObject(velocityVBO);
+	cudaGLUnmapBufferObject(accelerationVBO);
+
+}
+
+/*****************************************************************
+*
+*	GLUT Functions
+*
+****************************************************************/
+
+__host__
+void mouseMotion(int x, int y) {
+	float dx, dy;
+	dx = (float)(x - mouse_old_x);
+	dy = (float)(y - mouse_old_y);
+
+	viewPhi += 0.005f*dx;
+	viewTheta += 0.005f*dy;
+	seekTarget.x = 400.0f*sin(viewTheta)*sin(viewPhi);
+	seekTarget.y = 400.0f*cos(viewTheta);
+	seekTarget.z = 400.0f*sin(viewTheta)*cos(viewPhi);
+
+	mouse_old_x = x;
+	mouse_old_y = y;
+}
+
 __host__
 void windowResize(int height, int width) {
 	glViewport(0, 0, width, height);
@@ -187,26 +271,9 @@ void windowResize(int height, int width) {
 	gluPerspective(45.0, (double)width / (double)height, 0.1, 10.0);
 }
 
-// Controls for simulation
 __host__
 void Keyboard(unsigned char key, int x, int y) {
-	if (key == GLUT_KEY_RIGHT) {
-		fprintf(stdout, "   Moving Y-axis up.\n");
-		rY += 15;
-	}
-	else if (key == GLUT_KEY_LEFT) {
-		fprintf(stdout, "   Moving Y-axis down.\n");
-		rY -= 15;
-	}
-	else if (key == GLUT_KEY_DOWN) {
-		fprintf(stdout, "   Moving X-axis left.\n");
-		rX -= 15;
-	}
-	else if (key == GLUT_KEY_UP) {
-		fprintf(stdout, "   Moving X-axis right.\n");
-		rX += 15;
-	}
-	else if (key == 27) { // Escape
+	if (key == 27) { // Escape
 		fprintf(stdout, "   Exiting application.\n");
 		exit(1);
 	}
@@ -215,19 +282,8 @@ void Keyboard(unsigned char key, int x, int y) {
 	glutPostRedisplay();
 }
 
-// Function called when incorrect command line syntax is called or -h flag is passed
-__host__
-void help() {
-	fprintf(stderr, "./boids --help|-h --nboids|-n \n");
-}
-
-int timebase = 0;
-int frame = 0;
-
-// Main render function for GLUT which loops until exit
 __host__
 void Render() {
-	//fprintf(stdout, "   Entering Render Loop.\n");
 
 	static float fps = 0;
 	frame++;
@@ -250,13 +306,8 @@ void Render() {
 	// Clear screen
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	// Set View Matrix
-	//glMatrixMode(GL_MODELVIEW);
-	//glLoadIdentity();
-
 	glUseProgram(program[PASS_THROUGH]);
 
-	//fprintf(stdout, "   Drawing Vertices.\n");
 	// Render from VBO
 	glEnableVertexAttribArray(positionLocation);
 	glBindBuffer(GL_ARRAY_BUFFER, positionVBO);
@@ -272,71 +323,13 @@ void Render() {
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO);
 
-	glPointSize(10.0f);
+	glPointSize(5.0f);
 	glDrawElements(GL_POINTS, nBoids, GL_UNSIGNED_INT, 0);
 
 	glDisableVertexAttribArray(0);
-
-	// Perspective modifications
-	//glRotatef(rX, 1.0, 0.0, 0.0);
-	//glRotatef(rY, 0.0, 1.0, 0.0);
 
 	// Switch Buffers to show rendered
 	glutPostRedisplay();
 	glutSwapBuffers();
 
-}
-
-// Runs all CUDA related functions
-__host__
-void runCUDA() {
-
-	float* dptrvert = NULL;
-	float* velptr = NULL;
-	float* accptr = NULL;
-	//fprintf(stdout, "   Mapping GL buffer.\n");
-	cudaGLMapBufferObject((void**)&dptrvert, positionVBO);
-	cudaGLMapBufferObject((void**)&velptr, velocityVBO);
-	cudaGLMapBufferObject((void**)&accptr, accelerationVBO);
-
-	flock(nBoids, window_width, window_height, seekTarget);
-	cudaUpdateVBO(nBoids, dptrvert, velptr, accptr);
-
-	// unmap buffer object
-	cudaGLUnmapBufferObject(positionVBO);
-	cudaGLUnmapBufferObject(velocityVBO);
-	cudaGLUnmapBufferObject(accelerationVBO);
-
-}
-
-void initShaders(GLuint* program) {
-	GLint location;
-
-	program[1] = glslUtility::createProgram("shaders/planetVS.glsl", "shaders/planetGS.glsl", "shaders/planetFS.glsl", attributeLocations, 1);
-	glUseProgram(program[1]);
-
-	if ((location = glGetUniformLocation(program[1], "u_projMatrix")) != -1)
-	{
-		glUniformMatrix4fv(location, 1, GL_FALSE, &projection[0][0]);
-	}
-	if ((location = glGetUniformLocation(program[1], "u_cameraPos")) != -1)
-	{
-		glUniform3fv(location, 1, &cameraPosition[0]);
-	}
-}
-
-__host__
-void mouseMotion(int x, int y) {
-	float dx, dy;
-	dx = (float)(x - mouse_old_x);
-	dy = (float)(y - mouse_old_y);
-
-	viewPhi += 0.005f*dx;
-	viewTheta += 0.005f*dy;
-	seekTarget.x = 400.0f*sin(viewTheta)*sin(viewPhi);
-	seekTarget.y = 400.0f*cos(viewTheta);
-	seekTarget.z = 400.0f*sin(viewTheta)*cos(viewPhi);
-
-	mouse_old_x = x;
-	mouse_old_y = y;
 }

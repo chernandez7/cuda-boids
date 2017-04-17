@@ -33,38 +33,40 @@
 GLuint positionLocation = 1;
 GLuint velocityLocation = 2;
 GLuint accelerationLocation = 3;
+
 GLuint positionVBO = (GLuint)NULL;
 GLuint velocityVBO = (GLuint)NULL;
 GLuint accelerationVBO = (GLuint)NULL;
 GLuint IBO = (GLuint)NULL;
-GLuint displayImage;
 
 GLuint program[2];
 const unsigned int PASS_THROUGH = 1;
 const char *attributeLocations[] = { "position", "velocity", "acceleration" };
+
 glm::mat4 projection;
 glm::mat4 view;
 glm::vec3 cameraPosition(3.5, 3.5, 3);
-float fovy = 70.0f;
-float zNear = 0.10;
-float zFar = 100.0;
 
-// Rotation of X-axis camera perspective
-double rX = 0.0;
-// Rotation of Y-axis camera perspective
-double rY = 0.0;
-int window_width = 1000;
-int window_height = 1000;
+float fovy = 20.0f;
+float zNear = 0.01f;
+float zFar = 100.0;
+int timebase = 0;
+int frame = 0;
+
+
+int window_width = 750;
+int window_height = 750;
 int timeSinceLastFrame;
 int mouse_old_x, mouse_old_y;
+
 int nBoids = 0;
 float viewPhi = 0;
 float viewTheta = 0;
 float3 seekTarget;
 
+
 int main(int argc, char* argv[]);
 void printDeviceProps();
-
 void initVAO();
 void idleSim();
 void windowResize(int height, int width);
