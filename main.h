@@ -53,8 +53,8 @@ float zFar = 100.0;
 double rX = 0.0;
 // Rotation of Y-axis camera perspective
 double rY = 0.0;
-int window_width = 600;
-int window_height = 600;
+int window_width = 1000;
+int window_height = 1000;
 int timeSinceLastFrame;
 int mouse_old_x, mouse_old_y;
 int nBoids = 0;

@@ -28,7 +28,7 @@ int main(int argc, char* argv[]) {
 		}
 	}
 	*/
-	nBoids = 500;
+	nBoids = 100;
 
 	// OpenGL / GLUT Initialization
 	Init(argc, argv);
@@ -56,7 +56,7 @@ int main(int argc, char* argv[]) {
 	glutDisplayFunc(Render);
 	glutKeyboardFunc(Keyboard);
 	glutPassiveMotionFunc(mouseMotion);
-	
+
 	// Start GLUT Loop
 	glutMainLoop();
 
@@ -111,7 +111,7 @@ void Init(int argc, char* argv[]) {
 	timeSinceLastFrame = glutGet(GLUT_ELAPSED_TIME);
 
 	// For mouse location
-	seekTarget = make_float3(0.0, 0.0, 0.0);	
+	seekTarget = make_float3(0.0, 0.0, 0.0);
 
 	initVAO();
 }
@@ -272,7 +272,7 @@ void Render() {
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO);
 
-	glPointSize(6.0f);
+	glPointSize(10.0f);
 	glDrawElements(GL_POINTS, nBoids, GL_UNSIGNED_INT, 0);
 
 	glDisableVertexAttribArray(0);
@@ -290,7 +290,7 @@ void Render() {
 // Runs all CUDA related functions
 __host__
 void runCUDA() {
-	
+
 	float* dptrvert = NULL;
 	float* velptr = NULL;
 	float* accptr = NULL;
@@ -306,7 +306,7 @@ void runCUDA() {
 	cudaGLUnmapBufferObject(positionVBO);
 	cudaGLUnmapBufferObject(velocityVBO);
 	cudaGLUnmapBufferObject(accelerationVBO);
-	
+
 }
 
 void initShaders(GLuint* program) {
