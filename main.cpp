@@ -27,14 +27,20 @@ int main(int argc, char* argv[]) {
 			if (isdigit(*argv[i]))
 				nBoids = atoi(argv[i]);
 		}
-		else {
+		else if (strcmp(argv[i], "--mouse") == 0 || strcmp(argv[i], "-m") == 0) {
+		followMouse = true;
+		} else if (strcmp(argv[i], "--naive") == 0) == 0) {
+		naive = true;
+		} else {
 			fprintf(stderr, "Unknown option %s\n", argv[i]);
 			help();
 			return 1;
 		}
 	}
 	*/
-	nBoids = 100;
+	nBoids = 512;
+	followMouse = false;
+	naive = false;
 
 	// OpenGL / GLUT Initialization
 	Init(argc, argv);
@@ -50,7 +56,12 @@ int main(int argc, char* argv[]) {
 	initCuda(nBoids);
 
 	// Perspective
-	projection = glm::perspective(fovy, float(window_width) / float(window_height), zNear, zFar);
+	projection = glm::perspective(
+		fovy,										// Field of View
+		float(window_width) / float(window_height),	// Aspect Ratio
+		zNear,										// Near Plane
+		zFar										// Far Plane
+	);
 	view = glm::lookAt(cameraPosition, glm::vec3(0.0, 0.0, 0), glm::vec3(0, 1, 0));
 	projection = projection * view;
 
@@ -102,7 +113,7 @@ void Init(int argc, char* argv[]) {
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA );
 	glutInitWindowSize(window_width, window_height);
-	glutInitWindowPosition(30, 30);
+	glutInitWindowPosition(0, 30);
 	glutCreateWindow("cuda-boids");
 
 	// Init GLFW
@@ -124,6 +135,8 @@ void Init(int argc, char* argv[]) {
 
 	// For mouse location
 	seekTarget = make_float3(0.0, 0.0, 0.0);
+
+	glClearColor(1.0f, 1.0f, 1.0f, 0.0f);
 
 	initVAO();
 }
@@ -148,10 +161,10 @@ __host__
 void initVAO(void) {
 	fprintf(stdout, "   Creating Vertex Array Objects.\n");
 
-	GLfloat *bodies = new GLfloat[4 * (nBoids)];
-	GLfloat *velocities = new GLfloat[3 * (nBoids)];
-	GLfloat *accelerations = new GLfloat[3 * (nBoids)];
-	GLuint *bindices = new GLuint[nBoids];
+	GLfloat* bodies = new GLfloat[4 * (nBoids)];
+	GLfloat* velocities = new GLfloat[3 * (nBoids)];
+	GLfloat* accelerations = new GLfloat[3 * (nBoids)];
+	GLuint* bindices = new GLuint[nBoids];
 
 	// Initializing all positions and vel's at 0
 	for (int i = 0; i < nBoids; i++) {
@@ -178,6 +191,7 @@ void initVAO(void) {
 	glGenBuffers(1, &IBO);
 
 	fprintf(stdout, "   Binding VBO to GL buffers.\n");
+
 	// Assign VBO to buffer
 	glBindBuffer(GL_ARRAY_BUFFER, positionVBO);
 	// Add bodies and size to buffer
@@ -208,7 +222,7 @@ void initVAO(void) {
 
 __host__
 void help() {
-	fprintf(stderr, "./boids --help|-h --nboids|-n \n");
+	fprintf(stderr, "./boids --help|-h --nboids|-n --mouse|-m \n");
 }
 
 /*****************************************************************
@@ -219,11 +233,11 @@ void help() {
 
 // Runs all CUDA related functions
 __host__
-void runCUDA() {
+void runCUDA(bool followMouse) {
 
-	float* dptrvert = NULL;
-	float* velptr = NULL;
-	float* accptr = NULL;
+	float* dptrvert = nullptr;
+	float* velptr = nullptr;
+	float* accptr = nullptr;
 
 	// Map BO to array
 	cudaGLMapBufferObject((void**)&dptrvert, positionVBO);
@@ -231,7 +245,7 @@ void runCUDA() {
 	cudaGLMapBufferObject((void**)&accptr, accelerationVBO);
 
 	// Call wrappers for kernels
-	flock(nBoids, window_width, window_height, seekTarget);
+	flock(nBoids, window_width, window_height, seekTarget, followMouse, naive);
 	cudaUpdateVBO(nBoids, dptrvert, velptr, accptr);
 
 	// Unmap buffer object
@@ -249,6 +263,7 @@ void runCUDA() {
 
 __host__
 void mouseMotion(int x, int y) {
+
 	float dx, dy;
 	dx = (float)(x - mouse_old_x);
 	dy = (float)(y - mouse_old_y);
@@ -268,7 +283,6 @@ void windowResize(int height, int width) {
 	glViewport(0, 0, width, height);
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	gluPerspective(45.0, (double)width / (double)height, 0.1, 10.0);
 }
 
 __host__
@@ -297,10 +311,16 @@ void Render() {
 	timeSinceLastFrame = glutGet(GLUT_ELAPSED_TIME);
 
 	// Launch Kernel
-	runCUDA();
+	runCUDA(followMouse);
 
 	char title[100];
-	sprintf(title, "[%d boids] [%0.2f fps] [%0.2f, %0.2f, %0.2f mouse] [%0.2fms]", nBoids, fps, seekTarget.x, seekTarget.y, seekTarget.z, executionTime);
+	if (followMouse) {
+		sprintf(title, "[%d boids] [%0.2f fps] [%0.2f, %0.2f, %0.2f mouse] [%0.2fms]",
+			nBoids, fps, seekTarget.x, seekTarget.y, seekTarget.z, executionTime);
+	} else {
+		sprintf(title, "[%d boids] [%0.2f fps] [%0.2fms]",
+			nBoids, fps, executionTime);
+	}
 	glutSetWindowTitle(title);
 
 	// Clear screen
@@ -311,22 +331,22 @@ void Render() {
 	// Render from VBO
 	glEnableVertexAttribArray(positionLocation);
 	glBindBuffer(GL_ARRAY_BUFFER, positionVBO);
-	glVertexAttribPointer((GLuint)0, 4, GL_FLOAT, GL_FALSE, 0, 0);
+	glVertexAttribPointer((GLuint)positionLocation, 4, GL_FLOAT, GL_FALSE, 0, 0);
 
 	glEnableVertexAttribArray(velocityLocation);
 	glBindBuffer(GL_ARRAY_BUFFER, velocityVBO);
-	glVertexAttribPointer((GLuint)1, 3, GL_FLOAT, GL_FALSE, 0, 0);
+	glVertexAttribPointer((GLuint)velocityLocation, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
 	glEnableVertexAttribArray(accelerationLocation);
 	glBindBuffer(GL_ARRAY_BUFFER, accelerationVBO);
-	glVertexAttribPointer((GLuint)2, 3, GL_FLOAT, GL_FALSE, 0, 0);
+	glVertexAttribPointer((GLuint)accelerationLocation, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO);
 
-	glPointSize(5.0f);
-	glDrawElements(GL_POINTS, nBoids, GL_UNSIGNED_INT, 0);
+	glPointSize(4.0f);
+	glDrawElements(GL_POINTS, nBoids, GL_UNSIGNED_INT, 0); // where draw happens
 
-	glDisableVertexAttribArray(0);
+	glDisableVertexAttribArray(positionLocation);
 
 	// Switch Buffers to show rendered
 	glutPostRedisplay();

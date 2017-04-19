@@ -30,9 +30,9 @@
 // COMMON
 //#include <aligned_allocator.h>
 
-GLuint positionLocation = 1;
-GLuint velocityLocation = 2;
-GLuint accelerationLocation = 3;
+GLuint positionLocation = 0;
+GLuint velocityLocation = 1;
+GLuint accelerationLocation = 2;
 
 GLuint positionVBO = (GLuint)NULL;
 GLuint velocityVBO = (GLuint)NULL;
@@ -41,25 +41,27 @@ GLuint IBO = (GLuint)NULL;
 
 GLuint program[2];
 const unsigned int PASS_THROUGH = 1;
-const char *attributeLocations[] = { "position", "velocity", "acceleration" };
+const char *attributeLocations[] = { "position", "velocity", "acceleration"};
 
 glm::mat4 projection;
 glm::mat4 view;
-glm::vec3 cameraPosition(3.5, 3.5, 3);
+glm::vec3 cameraPosition(3.5f, 3.5f, 3.0f);
 
-float fovy = 20.0f;
-float zNear = 0.01f;
-float zFar = 100.0;
+float fovy = 90.0f;
+float zNear = 0.10f;
+float zFar = 1000.0;
+
 int timebase = 0;
 int frame = 0;
 
-
-int window_width = 750;
-int window_height = 750;
+int window_width = 1000;
+int window_height = 1000;
 int timeSinceLastFrame;
 int mouse_old_x, mouse_old_y;
 
 int nBoids = 0;
+bool followMouse = false;
+bool naive = false;
 float viewPhi = 0;
 float viewTheta = 0;
 float3 seekTarget;
