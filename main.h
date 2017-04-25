@@ -19,7 +19,11 @@
 #else
 #include <GL/glew.h>
 #include <GL/glut.h>
+//#ifdef _WIN32
 #include <GLFW/glfw3.h>
+//#endif
+//#include <GLFW/glfw.h>
+
 #include "glslUtility.h"
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
@@ -27,10 +31,10 @@
 // CUDA
 #include <cuda_runtime.h>
 #include <cuda_gl_interop.h> // interop functionality
-#include <helper_cuda.h>
-#include <helper_cuda_gl.h> // checkCudaErrors()
+//#include <helper_cuda.h>
+//#include <helper_cuda_gl.h> // checkCudaErrors()
 // COMMON
-//#include <aligned_allocator.h>
+#include <aligned_allocator.h>
 
 GLuint positionLocation = 0;
 GLuint velocityLocation = 1;
