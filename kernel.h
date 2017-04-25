@@ -1,7 +1,9 @@
 #ifndef KERNEL_H
 #define KERNEL_H
 
+#ifdef _WIN32
 #include <Windows.h>
+#endif
 #include <stdio.h>
 #include <cmath>
 
@@ -21,16 +23,16 @@ const float scene_scale = 4e2;
 const float __device__ maxVelocity = 2.0f; // acc over time
 const float __device__ maxSteer = 0.1f; // turn radius
 
-const __device__ float sep_dist = 100;
-const __device__ float ali_dist = 400;
-const __device__ float coh_dist = 300;
+__device__ float dev_sep_dist;
+__device__ float dev_ali_dist;
+__device__ float dev_coh_dist;
 
-const __device__ float sep_weight = 1.0f;
-const __device__ float ali_weight = 1.5f;
-const __device__ float coh_weight = 1.0f;
+__device__ float dev_sep_weight;
+__device__ float dev_ali_weight;
+__device__ float dev_coh_weight;
 
 void initCuda(int n);
-void flock(int n, int window_width, int window_height, float3 target, bool followMouse, bool naive);
+void flock(int n, int window_width, int window_height, float3 target, bool followMouse, bool naive, float sep_dist, float sep_weight, float ali_dist, float ali_weight, float coh_dist, float coh_weight);
 void cudaUpdateVBO(int n, float* vbodptr, float* velptr, float* accptr);
 
 #endif

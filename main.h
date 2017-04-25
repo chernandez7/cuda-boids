@@ -2,7 +2,9 @@
 #define MAIN_H
 
 // C HEADERS
+#ifdef _WIN32
 #include <Windows.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
@@ -66,18 +68,26 @@ float viewPhi = 0;
 float viewTheta = 0;
 float3 seekTarget;
 
+float sep_dist = 100;
+float ali_dist = 400;
+float coh_dist = 300;
+
+float sep_weight = 1.0f;
+float ali_weight = 1.5f;
+float coh_weight = 1.0f;
+
 
 int main(int argc, char* argv[]);
 void printDeviceProps();
+void printControls();
 void initVAO();
-void idleSim();
 void windowResize(int height, int width);
 void Keyboard(unsigned char key, int x, int y);
 void help();
 void Render();
 void mouseMotion(int x, int y);
 void Init(int argc, char* argv[]);
-void runCUDA();
+void runCUDA(bool followMouse, float sep_dist, float sep_weight, float ali_dist, float ali_weight, float coh_dist, float coh_weight);
 void initShaders(GLuint * program);
 
 

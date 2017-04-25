@@ -28,7 +28,7 @@ namespace glslUtility {
 			file.seekg(0, ios::beg);
 			file.read(memblock, size);
 			file.close();
-			std::cout << "   file " << fname << " loaded" << std::endl;
+			//std::cout << "   file " << fname << " loaded" << std::endl;
 			return memblock;
 		}
 
@@ -159,7 +159,7 @@ namespace glslUtility {
 
 		GLuint program = glCreateProgram();
 
-		for (GLuint i = 0; i < numberOfLocations; ++i)
+		for (GLuint i = 0; i < numberOfLocations; i++)
 		{
 			glBindAttribLocation(program, i, attributeLocations[i]);
 		}
@@ -175,7 +175,7 @@ namespace glslUtility {
 
 		GLuint program = glCreateProgram();
 
-		for (GLuint i = 0; i < numberOfLocations; ++i)
+		for (GLuint i = 0; i < numberOfLocations; i++)
 		{
 			glBindAttribLocation(program, i, attributeLocations[i]);
 		}

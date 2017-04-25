@@ -12,7 +12,7 @@ __host__
 int main(int argc, char* argv[]) {
 	/*
 	// Parse command line parameters
-	for (int i = 1; i < argc; ++i) {
+	for (int i = 1; i < argc; i++) {
 #define check_index(i,str) \
   if ((i) >= argc) \
      { fprintf(stderr,"Missing 2nd argument for %s\n", str); return 1; }
@@ -67,6 +67,8 @@ int main(int argc, char* argv[]) {
 
 	initShaders(program);
 
+	printControls();
+
 	glEnable(GL_DEPTH_TEST);
 
 	glutReshapeFunc(windowResize);
@@ -99,13 +101,37 @@ void printDeviceProps() {
 		fprintf(stderr, "   regsPerBlock:                   %d\n", props.regsPerBlock);
 		fprintf(stderr, "   warpSize:                       %d\n", props.warpSize);
 		fprintf(stderr, "   multiProcessorCount:            %d\n", props.multiProcessorCount);
-		fprintf(stderr, "   maxThreadsPerBlock:             %d\n", props.maxThreadsPerBlock);
+		fprintf(stderr, "   maxThreadsPerBlock:             %d\n\n", props.maxThreadsPerBlock);
 	}
 }
 
 __host__
+void printControls() {
+	fprintf(stderr, "   **************** Controls ****************\n");
+	fprintf(stderr, "   W: Increase Separation Radius\n");
+	fprintf(stderr, "   T: Increase Alignment Radius\n");
+	fprintf(stderr, "   I: Increase Cohesion Radius\n\n");
+
+	fprintf(stderr, "   S: Decrease Separation Radius\n");
+	fprintf(stderr, "   G: Decrease Alignment Radius\n");
+	fprintf(stderr, "   K: Decrease Cohesion Radius\n\n");
+
+	fprintf(stderr, "   A: Increase Separation Weight\n");
+	fprintf(stderr, "   F: Increase Alignment Weight\n");
+	fprintf(stderr, "   J: Increase Cohesion Weight\n\n");
+
+	fprintf(stderr, "   D: Decrease Separation Weight\n");
+	fprintf(stderr, "   J: Decrease Alignment Weight\n");
+	fprintf(stderr, "   L: Decrease Cohesion Weight\n\n");
+
+	fprintf(stderr, "   R: Reset Parameter Values to Default\n");
+
+	fprintf(stderr, "   *****************************************\n\n");
+}
+
+__host__
 void Init(int argc, char* argv[]) {
-	fprintf(stdout, "   Initalizing application.\n");
+	fprintf(stdout, "   Initalizing application.\n\n");
 	// Print out GPU Details
 	printDeviceProps();
 
@@ -144,7 +170,13 @@ void Init(int argc, char* argv[]) {
 void initShaders(GLuint* program) {
 	GLint location;
 
-	program[1] = glslUtility::createProgram("shaders/planetVS.glsl", "shaders/planetGS.glsl", "shaders/planetFS.glsl", attributeLocations, 1);
+	program[1] = glslUtility::createProgram(
+		"shaders/particleVS.glsl",
+		"shaders/particleGS.glsl",
+		"shaders/particleFS.glsl",
+		attributeLocations,
+		1
+	);
 	glUseProgram(program[1]);
 
 	if ((location = glGetUniformLocation(program[1], "u_projMatrix")) != -1)
@@ -222,7 +254,7 @@ void initVAO(void) {
 
 __host__
 void help() {
-	fprintf(stderr, "./boids --help|-h --nboids|-n --mouse|-m \n");
+	fprintf(stderr, "./boids --help|-h --nboids|-n --mouse|-m --naive \n");
 }
 
 /*****************************************************************
@@ -233,7 +265,7 @@ void help() {
 
 // Runs all CUDA related functions
 __host__
-void runCUDA(bool followMouse) {
+void runCUDA(bool followMouse, float sep_dist, float sep_weight, float ali_dist, float ali_weight, float coh_dist, float coh_weight) {
 
 	float* dptrvert = nullptr;
 	float* velptr = nullptr;
@@ -245,7 +277,7 @@ void runCUDA(bool followMouse) {
 	cudaGLMapBufferObject((void**)&accptr, accelerationVBO);
 
 	// Call wrappers for kernels
-	flock(nBoids, window_width, window_height, seekTarget, followMouse, naive);
+	flock(nBoids, window_width, window_height, seekTarget, followMouse, naive, sep_dist, sep_weight, ali_dist, ali_weight, coh_dist, coh_weight);
 	cudaUpdateVBO(nBoids, dptrvert, velptr, accptr);
 
 	// Unmap buffer object
@@ -291,6 +323,63 @@ void Keyboard(unsigned char key, int x, int y) {
 		fprintf(stdout, "   Exiting application.\n");
 		exit(1);
 	}
+	else if (key == 'w') { // sep up
+		if (sep_dist <= 0)	sep_dist = 0;
+		else				sep_dist += 10;
+	}
+	else if (key == 'a') { // sep weight down
+		if (sep_weight <= 0)	sep_weight = 0;
+		else					sep_weight -= 0.1;
+	}
+	else if (key == 's') { // sep down
+		if (sep_dist <= 0)	sep_dist = 0;
+		else				sep_dist -= 10;
+	}
+	else if (key == 'd') { // sep weight up
+		if (sep_weight <= 0)	sep_weight = 0;
+		else					sep_weight += 0.1;
+	}
+	else if (key == 't') { // ali up
+		if (ali_dist <= 0)	ali_dist = 0;
+		else				ali_dist += 10;
+	}
+	else if (key == 'f') { // ali weight down
+		if (ali_weight <= 0)	ali_weight = 0;
+		else					ali_weight -= 0.1;
+	}
+	else if (key == 'g') { // ali down
+		if (ali_dist <= 0)	ali_dist = 0;
+		else				ali_dist -= 10;
+	}
+	else if (key == 'h') { // ali weight up
+		if (ali_weight <= 0)	ali_weight = 0;
+		else					ali_weight += 0.1;
+	}
+	else if (key == 'i') { // coh up
+		if (coh_dist <= 0)	coh_dist = 0;
+		else				coh_dist += 10;
+	}
+	else if (key == 'j') { // coh weight down
+		if (coh_weight <= 0)	coh_weight = 0;
+		else					coh_weight -= 0.1;
+	}
+	else if (key == 'k') { // coh down
+		if (coh_dist <= 0)	coh_dist = 0;
+		else				coh_dist -= 10;
+	}
+	else if (key == 'l') { // coh weight up
+		if (coh_weight <= 0)	coh_weight = 0;
+		else					coh_weight += 0.1;
+	}
+	else if (key == 'r') { // reset values
+		sep_dist = 100;
+		ali_dist = 400;
+		coh_dist = 300;
+
+		sep_weight = 1.0f;
+		ali_weight = 1.5f;
+		coh_weight = 1.0f;
+	}
 
 	// Request display update
 	glutPostRedisplay();
@@ -311,15 +400,16 @@ void Render() {
 	timeSinceLastFrame = glutGet(GLUT_ELAPSED_TIME);
 
 	// Launch Kernel
-	runCUDA(followMouse);
+	runCUDA(followMouse, sep_dist, sep_weight, ali_dist, ali_weight, coh_dist, coh_weight);
 
-	char title[100];
+	char title[200];
 	if (followMouse) {
-		sprintf(title, "[%d boids] [%0.2f fps] [%0.2f, %0.2f, %0.2f mouse] [%0.2fms]",
-			nBoids, fps, seekTarget.x, seekTarget.y, seekTarget.z, executionTime);
+		// sep_dist not taken into consideration when mouse is target
+		sprintf(title, "[%d boids] [%0.2f fps] [%0.2f, %0.2f, %0.2f mouse] dist: (%0.2f ali, %0.2f coh) weight: (%0.2f sep, %0.2f ali, %0.2f coh)",
+			nBoids, fps, seekTarget.x, seekTarget.y, seekTarget.z, ali_dist, coh_dist, sep_weight, ali_weight, coh_weight);
 	} else {
-		sprintf(title, "[%d boids] [%0.2f fps] [%0.2fms]",
-			nBoids, fps, executionTime);
+		sprintf(title, "[%d boids] [%0.2f fps] dist: (%0.2f sep, %0.2f ali, %0.2f coh) weight: (%0.2f sep, %0.2f ali, %0.2f coh)",
+			nBoids, fps, sep_dist, ali_dist, coh_dist, sep_weight, ali_weight, coh_weight);
 	}
 	glutSetWindowTitle(title);
 

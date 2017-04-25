@@ -12,5 +12,4 @@ void main()
     float light = 0.1 + 0.9*clamp(dot(worldNormal,L),0.0, 1.0);
     vec3 color = fVelocity;
 	FragColor = vec4(light*color,1.0);
-//	FragColor = vec4(light*color, 1.0);
 } 

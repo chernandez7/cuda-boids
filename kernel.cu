@@ -10,6 +10,10 @@ float4* dev_pos;
 float3* dev_vel;
 float3* dev_acc;
 
+float3* dev_sep;
+float3* dev_ali;
+float3* dev_coh;
+
 // Results for RNG
 float3* dev_pos_results;
 float3* dev_vel_results;
@@ -122,250 +126,6 @@ float3 RNG(int nBoids, curandState_t* state, float3* results, int max) {
 
 /*****************************************************************
 *
-*	Bird-oid Rules
-*
-****************************************************************/
-
-__device__
-float3 SeparationRule(int n, float4* pos, float3* vel, float3 target, bool followMouse) {
-	int index = threadIdx.x + (blockIdx.x * blockDim.x);
-	if (index < n) {
-		float3 myPosition = make_float3(pos[index].x, pos[index].y, pos[index].z);
-		float3 myVelocity = make_float3(vel[index].x, vel[index].y, vel[index].z);
-		float3 steer = make_float3(0, 0, 0);
-		float neighborDistance = sep_dist; // Radius of consideration
-		int numberOfNeighbors = 0;
-
-		// Check against all particles if in range
-		float distanceToNeighbor;
-		for (int i = 0; i < n; i++) {
-			float3 theirPos = make_float3(pos[i].x, pos[i].y, pos[i].z);
-
-			if (followMouse) {
-				distanceToNeighbor = distanceFormula(myPosition, target); // Follow Mouse
-
-				 // Add the difference of positions to steer force
-				if (distanceToNeighbor > 0) {
-					// calc and normalize delta
-					float3 deltaPos = sub2Vectors(myPosition, theirPos);
-					float3 normalized_delta = normalizeVector(deltaPos);
-
-					// div delta by distance to weight
-					normalized_delta.x /= distanceToNeighbor;
-					normalized_delta.y /= distanceToNeighbor;
-					normalized_delta.z /= distanceToNeighbor;
-
-					// add delta to steer
-					steer.x += normalized_delta.x;
-					steer.y += normalized_delta.y;
-					steer.z += normalized_delta.z;
-
-					// increment number of neighbors
-					numberOfNeighbors++;
-				}
-			}
-			else {
-				distanceToNeighbor = distanceFormula(myPosition, theirPos); // Follow Flock
-
-				// Add the difference of positions to steer force
-				if (distanceToNeighbor > 0 && distanceToNeighbor < neighborDistance) {
-					// calc and normalize delta
-					float3 deltaPos = sub2Vectors(myPosition, theirPos);
-					float3 normalized_delta = normalizeVector(deltaPos);
-
-					// div delta by distance to weight
-					normalized_delta.x /= distanceToNeighbor;
-					normalized_delta.y /= distanceToNeighbor;
-					normalized_delta.z /= distanceToNeighbor;
-
-					// add delta to steer
-					steer.x += normalized_delta.x;
-					steer.y += normalized_delta.y;
-					steer.z += normalized_delta.z;
-
-					// increment number of neighbors
-					numberOfNeighbors++;
-				}
-			}
-
-
-		}
-		if (numberOfNeighbors > 0) {
-			// weight steer by number of neighbors
-			steer.x /= numberOfNeighbors;
-			steer.y /= numberOfNeighbors;
-			steer.z /= numberOfNeighbors;
-		}
-		float size = magnitudeOfVector(steer);
-		if (size > 0) {
-			float3 normalized_steer = normalizeVector(steer);
-
-			//mulVectorByScalar(maxSpeed, normalized_steer);
-			normalized_steer.x *= maxVelocity;
-			normalized_steer.y *= maxVelocity;
-			normalized_steer.z *= maxVelocity;
-
-			//sub2Vectors(normalized_steer, myVelocity);
-			normalized_steer.x -= myVelocity.x;
-			normalized_steer.y -= myVelocity.y;
-			normalized_steer.z -= myVelocity.z;
-
-			//limit(0.5, normalized_steer);
-			float steer_size = magnitudeOfVector(normalized_steer);
-			if (steer_size > maxSteer) {
-				normalized_steer.x /= steer_size;
-				normalized_steer.y /= steer_size;
-				normalized_steer.z /= steer_size;
-			}
-
-			steer.x = normalized_steer.x;
-			steer.y = normalized_steer.y;
-			steer.z = normalized_steer.z;
-		}
-		return steer;
-	}
-	else { // index out of range
-		return make_float3(0, 0, 0);
-	}
-}
-
-__device__
-float3 AlignmentRule(int n, float4* pos, float3* vel) {
-	int index = threadIdx.x + (blockIdx.x * blockDim.x);
-	if (index < n) {
-		float3 myPosition = make_float3(pos[index].x, pos[index].y, pos[index].z);
-		float3 myVelocity = make_float3(vel[index].x, vel[index].y, vel[index].z);
-
-		float neighborDistance = ali_dist; // Radius of consideration
-		int numberOfNeighbors = 0;
-		float3 sum = make_float3(0, 0, 0);
-
-		// Check against all particles if in range
-		for (int i = 0; i < n; i++) {
-			float3 theirPos = make_float3(pos[i].x, pos[i].y, pos[i].z);
-			float3 theirVel = make_float3(vel[i].x, vel[i].y, vel[i].z);
-			// Get distance between you and neighbor
-			float distanceToNeighbor = distanceFormula(myPosition, theirPos);
-			if (distanceToNeighbor > 0 && distanceToNeighbor < neighborDistance) {
-
-				// add vel to sum
-				sum.x += theirVel.x;
-				sum.y += theirVel.y;
-				sum.z += theirVel.z;
-
-				numberOfNeighbors++;
-			}
-		}
-		if (numberOfNeighbors > 0) {
-			// div sum by # of neighbors
-			sum.x /= numberOfNeighbors;
-			sum.y /= numberOfNeighbors;
-			sum.z /= numberOfNeighbors;
-
-			float3 normalized_sum = normalizeVector(sum);
-
-			//mulVectorByScalar(maxSpeed, normalized_sum);
-			normalized_sum.x *= maxVelocity;
-			normalized_sum.y *= maxVelocity;
-			normalized_sum.z *= maxVelocity;
-
-			// sub my vel from sum
-			normalized_sum.x -= myVelocity.x;
-			normalized_sum.y -= myVelocity.y;
-			normalized_sum.z -= myVelocity.z;
-
-			// limit vel
-			float size = magnitudeOfVector(normalized_sum);
-			if (size > 2.0f) {
-				normalized_sum.x /= size;
-				normalized_sum.y /= size;
-				normalized_sum.z /= size;
-			}
-
-			return normalized_sum;
-
-		}
-		else { // No neighbors nearby
-			return make_float3(0, 0, 0);
-		}
-	}
-	else { // index not in range
-		return make_float3(0, 0, 0);
-	}
-}
-
-__device__
-float3 CohesionRule(int n, float4* pos, float3* vel) {
-	int index = threadIdx.x + (blockIdx.x * blockDim.x);
-	if (index < n) {
-
-		float3 myPosition = make_float3(pos[index].x, pos[index].y, pos[index].z);
-
-		float neighborDistance = coh_dist; // Radius of consideration
-		int numberOfNeighbors = 0;
-		float3 sum = make_float3(0, 0, 0);
-
-		// Check against all particles if in range
-		for (int i = 0; i < n; i++) {
-			float3 theirPos = make_float3(pos[i].x, pos[i].y, pos[i].z);
-			// Get distance between you and neighbor
-			float distanceToNeighbor = distanceFormula(myPosition, theirPos) + pos[i].w; // take into account boidMass
-			// If in range add their pos to sum
-			if (distanceToNeighbor > 0 && distanceToNeighbor < neighborDistance) {
-
-				// add their pos to sum
-				sum.x += theirPos.x;
-				sum.y += theirPos.y;
-				sum.z += theirPos.z;
-
-				numberOfNeighbors++;
-			}
-		}
-		if (numberOfNeighbors > 0) {
-			//divVectorByScalar(numberOfNeighbors, sum);
-			sum.x /= numberOfNeighbors;
-			sum.y /= numberOfNeighbors;
-			sum.z /= numberOfNeighbors;
-
-			float3 desired = make_float3(0, 0, 0);
-
-			//sub2Vectors(desired, sum);
-			desired.x -= sum.x;
-			desired.y -= sum.y;
-			desired.z -= sum.z;
-
-			float3 normalized_desired = normalizeVector(desired);
-
-			//mulVectorByScalar(maxSpeed, desired);
-			normalized_desired.x *= maxVelocity;
-			normalized_desired.y *= maxVelocity;
-			normalized_desired.z *= maxVelocity;
-
-			// Steering = desired - vel
-			normalized_desired.x -= vel[index].x;
-			normalized_desired.y -= vel[index].y;
-			normalized_desired.z -= vel[index].z;
-
-			// limit desired vel
-			float size = magnitudeOfVector(normalized_desired);
-			if (size > 0.5) {
-				normalized_desired.x /= size;
-				normalized_desired.y /= size;
-				normalized_desired.z /= size;
-			}
-			return normalized_desired;
-		}
-		else { // No neighbors nearby
-			return make_float3(0, 0, 0);
-		}
-	}
-	else { // index out of range
-		return make_float3(0, 0, 0);
-	}
-}
-
-/*****************************************************************
-*
 *	Kernels
 *
 ****************************************************************/
@@ -411,41 +171,286 @@ void generateRandomArray(int n, curandState_t* states, float3* arr, float3* resu
 }
 
 __global__
-void flocking(int n, float4* pos, float3* vel, float3* acc, float3 target, bool followMouse) {
+void copyParametersKernel(float sep_dist, float sep_weight, float ali_dist, float ali_weight, float coh_dist, float coh_weight) {
+	dev_sep_dist = sep_dist;
+	dev_ali_dist = ali_dist;
+	dev_coh_dist = coh_dist;
+
+	dev_sep_weight = sep_weight;
+	dev_ali_weight = ali_weight;
+	dev_coh_weight = coh_weight;
+}
+
+__global__
+void SeparationKernel(int n, float4* pos, float3* vel, float3 target, bool followMouse, float3* separation) {
+	int index = threadIdx.x + (blockIdx.x * blockDim.x);
+
+	float3 myPosition = make_float3(pos[index].x, pos[index].y, pos[index].z);
+	float3 myVelocity = make_float3(vel[index].x, vel[index].y, vel[index].z);
+	float3 steer = make_float3(0, 0, 0);
+	float neighborDistance = dev_sep_dist; // Radius of consideration
+	int numberOfNeighbors = 0;
+
+	// Check against all particles if in range
+	float distanceToNeighbor;
+	for (int i = 0; i < n; i++) {
+		float3 theirPos = make_float3(pos[i].x, pos[i].y, pos[i].z);
+
+		if (followMouse) {
+			distanceToNeighbor = distanceFormula(myPosition, target); // Follow Mouse
+
+																	  // Add the difference of positions to steer force
+			if (distanceToNeighbor > 0) {
+				// calc and normalize delta
+				float3 deltaPos = sub2Vectors(myPosition, theirPos);
+				float3 normalized_delta = normalizeVector(deltaPos);
+
+				// div delta by distance to weight
+				normalized_delta.x /= distanceToNeighbor;
+				normalized_delta.y /= distanceToNeighbor;
+				normalized_delta.z /= distanceToNeighbor;
+
+				// add delta to steer
+				steer.x += normalized_delta.x;
+				steer.y += normalized_delta.y;
+				steer.z += normalized_delta.z;
+
+				// increment number of neighbors
+				numberOfNeighbors++;
+			}
+		}
+		else {
+			distanceToNeighbor = distanceFormula(myPosition, theirPos); // Follow Flock
+
+																		// Add the difference of positions to steer force
+			if (distanceToNeighbor > 0 && distanceToNeighbor < neighborDistance) {
+				// calc and normalize delta
+				float3 deltaPos = sub2Vectors(myPosition, theirPos);
+				float3 normalized_delta = normalizeVector(deltaPos);
+
+				// div delta by distance to weight
+				normalized_delta.x /= distanceToNeighbor;
+				normalized_delta.y /= distanceToNeighbor;
+				normalized_delta.z /= distanceToNeighbor;
+
+				// add delta to steer
+				steer.x += normalized_delta.x;
+				steer.y += normalized_delta.y;
+				steer.z += normalized_delta.z;
+
+				// increment number of neighbors
+				numberOfNeighbors++;
+			}
+		}
+
+
+	}
+	if (numberOfNeighbors > 0) {
+		// weight steer by number of neighbors
+		steer.x /= numberOfNeighbors;
+		steer.y /= numberOfNeighbors;
+		steer.z /= numberOfNeighbors;
+	}
+	float size = magnitudeOfVector(steer);
+	if (size > 0) {
+		float3 normalized_steer = normalizeVector(steer);
+
+		//mulVectorByScalar(maxSpeed, normalized_steer);
+		normalized_steer.x *= maxVelocity;
+		normalized_steer.y *= maxVelocity;
+		normalized_steer.z *= maxVelocity;
+
+		//sub2Vectors(normalized_steer, myVelocity);
+		normalized_steer.x -= myVelocity.x;
+		normalized_steer.y -= myVelocity.y;
+		normalized_steer.z -= myVelocity.z;
+
+		//limit(0.5, normalized_steer);
+		float steer_size = magnitudeOfVector(normalized_steer);
+		if (steer_size > maxSteer) {
+			normalized_steer.x /= steer_size;
+			normalized_steer.y /= steer_size;
+			normalized_steer.z /= steer_size;
+		}
+
+		steer.x = normalized_steer.x;
+		steer.y = normalized_steer.y;
+		steer.z = normalized_steer.z;
+	}
+	//return steer;
+	separation[index].x = steer.x;
+	separation[index].y = steer.y;
+	separation[index].z = steer.z;
+}
+
+__global__
+void AlignmentKernel(int n, float4* pos, float3* vel, float3* alignment) {
+	int index = threadIdx.x + (blockIdx.x * blockDim.x);
+
+	float3 myPosition = make_float3(pos[index].x, pos[index].y, pos[index].z);
+	float3 myVelocity = make_float3(vel[index].x, vel[index].y, vel[index].z);
+
+	float neighborDistance = dev_ali_dist; // Radius of consideration
+	int numberOfNeighbors = 0;
+	float3 sum = make_float3(0, 0, 0);
+
+	// Check against all particles if in range
+	for (int i = 0; i < n; i++) {
+		float3 theirPos = make_float3(pos[i].x, pos[i].y, pos[i].z);
+		float3 theirVel = make_float3(vel[i].x, vel[i].y, vel[i].z);
+		// Get distance between you and neighbor
+		float distanceToNeighbor = distanceFormula(myPosition, theirPos);
+		if (distanceToNeighbor > 0 && distanceToNeighbor < neighborDistance) {
+
+			// add vel to sum
+			sum.x += theirVel.x;
+			sum.y += theirVel.y;
+			sum.z += theirVel.z;
+
+			numberOfNeighbors++;
+		}
+	}
+	if (numberOfNeighbors > 0) {
+		// div sum by # of neighbors
+		sum.x /= numberOfNeighbors;
+		sum.y /= numberOfNeighbors;
+		sum.z /= numberOfNeighbors;
+
+		float3 normalized_sum = normalizeVector(sum);
+
+		//mulVectorByScalar(maxSpeed, normalized_sum);
+		normalized_sum.x *= maxVelocity;
+		normalized_sum.y *= maxVelocity;
+		normalized_sum.z *= maxVelocity;
+
+		// sub my vel from sum
+		normalized_sum.x -= myVelocity.x;
+		normalized_sum.y -= myVelocity.y;
+		normalized_sum.z -= myVelocity.z;
+
+		// limit vel
+		float size = magnitudeOfVector(normalized_sum);
+		if (size > 2.0f) {
+			normalized_sum.x /= size;
+			normalized_sum.y /= size;
+			normalized_sum.z /= size;
+		}
+
+		//return normalized_sum;
+		alignment[index].x = normalized_sum.x;
+		alignment[index].y = normalized_sum.y;
+		alignment[index].z = normalized_sum.z;
+
+	}
+	else { // No neighbors nearby
+		   //return make_float3(0, 0, 0);
+		alignment[index].x = 0;
+		alignment[index].y = 0;
+		alignment[index].z = 0;
+	}
+}
+
+__global__
+void CohesionKernel(int n, float4* pos, float3* vel, float3* cohesion) {
+	int index = threadIdx.x + (blockIdx.x * blockDim.x);
+
+	float3 myPosition = make_float3(pos[index].x, pos[index].y, pos[index].z);
+
+	float neighborDistance = dev_coh_dist; // Radius of consideration
+	int numberOfNeighbors = 0;
+	float3 sum = make_float3(0, 0, 0);
+
+	// Check against all particles if in range
+	for (int i = 0; i < n; i++) {
+		float3 theirPos = make_float3(pos[i].x, pos[i].y, pos[i].z);
+		// Get distance between you and neighbor
+		float distanceToNeighbor = distanceFormula(myPosition, theirPos) + pos[i].w; // take into account boidMass
+																					 // If in range add their pos to sum
+		if (distanceToNeighbor > 0 && distanceToNeighbor < neighborDistance) {
+
+			// add their pos to sum
+			sum.x += theirPos.x;
+			sum.y += theirPos.y;
+			sum.z += theirPos.z;
+
+			numberOfNeighbors++;
+		}
+	}
+	if (numberOfNeighbors > 0) {
+		//divVectorByScalar(numberOfNeighbors, sum);
+		sum.x /= numberOfNeighbors;
+		sum.y /= numberOfNeighbors;
+		sum.z /= numberOfNeighbors;
+
+		float3 desired = make_float3(0, 0, 0);
+
+		//sub2Vectors(desired, sum);
+		desired.x -= sum.x;
+		desired.y -= sum.y;
+		desired.z -= sum.z;
+
+		float3 normalized_desired = normalizeVector(desired);
+
+		//mulVectorByScalar(maxSpeed, desired);
+		normalized_desired.x *= maxVelocity;
+		normalized_desired.y *= maxVelocity;
+		normalized_desired.z *= maxVelocity;
+
+		// Steering = desired - vel
+		normalized_desired.x -= vel[index].x;
+		normalized_desired.y -= vel[index].y;
+		normalized_desired.z -= vel[index].z;
+
+		// limit desired vel
+		float size = magnitudeOfVector(normalized_desired);
+		if (size > 0.5) {
+			normalized_desired.x /= size;
+			normalized_desired.y /= size;
+			normalized_desired.z /= size;
+		}
+		//return normalized_desired;
+		cohesion[index].x = normalized_desired.x;
+		cohesion[index].y = normalized_desired.y;
+		cohesion[index].z = normalized_desired.z;
+	}
+	else { // No neighbors nearby
+		   //return make_float3(0, 0, 0);
+		cohesion[index].x = 0;
+		cohesion[index].y = 0;
+		cohesion[index].z = 0;
+	}
+}
+
+__global__
+void flocking(int n, float4* pos, float3* vel, float3* acc, float3 target, bool followMouse, float3* separation, float3* alignment, float3* cohesion) {
 	int index = threadIdx.x + (blockIdx.x * blockDim.x);
 	if (index < n) {
-		// Separation
-		float3 separation = SeparationRule(n, pos, vel, target, followMouse);
-		// Alignment
-		float3 alignment = AlignmentRule(n, pos, vel);
-		// Cohesion
-		float3 cohesion = CohesionRule(n, pos, vel);
 
 		// Apply Arbitrary Weights
-		separation.x *= sep_weight;
-		separation.y *= sep_weight;
-		separation.z *= sep_weight;
+		separation[index].x *= dev_sep_weight;
+		separation[index].y *= dev_sep_weight;
+		separation[index].z *= dev_sep_weight;
 
-		alignment.x *= ali_weight;
-		alignment.y *= ali_weight;
-		alignment.z *= ali_weight;
+		alignment[index].x *= dev_ali_weight;
+		alignment[index].y *= dev_ali_weight;
+		alignment[index].z *= dev_ali_weight;
 
-		cohesion.x *= coh_weight;
-		cohesion.y *= coh_weight;
-		cohesion.z *= coh_weight;
+		cohesion[index].x *= dev_coh_weight;
+		cohesion[index].y *= dev_coh_weight;
+		cohesion[index].z *= dev_coh_weight;
 
 		// Apply Forces to acc
-		acc[index].x += separation.x;
-		acc[index].x += alignment.x;
-		acc[index].x += cohesion.x;
+		acc[index].x += separation[index].x;
+		acc[index].x += alignment[index].x;
+		acc[index].x += cohesion[index].x;
 
-		acc[index].y += separation.y;
-		acc[index].y += alignment.y;
-		acc[index].y += cohesion.y;
+		acc[index].y += separation[index].y;
+		acc[index].y += alignment[index].y;
+		acc[index].y += cohesion[index].y;
 
-		acc[index].z += separation.z;
-		acc[index].z += alignment.z;
-		acc[index].z += cohesion.z;
+		acc[index].z += separation[index].z;
+		acc[index].z += alignment[index].z;
+		acc[index].z += cohesion[index].z;
 	}
 }
 
@@ -529,7 +534,7 @@ void updatePosition(int n, float dt, float4 *pos, float3 *vel, float3 *acc, int 
 		float deltaFromOrigin = distanceFormula(pos[index], origin);
 
 		// Fix positions if particle is off screen
-		if (deltaFromOrigin > window_width) {
+		if (deltaFromOrigin > 1500) {
 			vel[index].x = -vel[index].x; // turn them around
 			vel[index].y = -vel[index].y;
 			vel[index].z = -vel[index].z;
@@ -569,13 +574,17 @@ void sendToVBO(int n, float scale, float4* pos, float3* vel, float3* acc,
 
 __host__
 void initCuda(int n) {
-	fprintf(stdout, "   Initializing CUDA.\n");
+	fprintf(stdout, "   Initializing CUDA.\n\n");
 	dim3 fullBlocksPerGrid((int)ceil(float(n) / float(BlockSize)));
 
 	// Malloc's
 	cudaMalloc((void**)&dev_pos, n * sizeof(float4));
 	cudaMalloc((void**)&dev_vel, n * sizeof(float3));
 	cudaMalloc((void**)&dev_acc, n * sizeof(float3));
+
+	cudaMalloc((void**)&dev_sep, n * sizeof(float3));
+	cudaMalloc((void**)&dev_ali, n * sizeof(float3));
+	cudaMalloc((void**)&dev_coh, n * sizeof(float3));
 
 	cudaMalloc((void **)&dev_pos_results, n * sizeof(float3));
 	cudaMalloc((void **)&dev_vel_results, n * sizeof(float3));
@@ -591,10 +600,16 @@ void initCuda(int n) {
 }
 
 __host__
-void flock(int n, int window_width, int window_height, float3 target, bool followMouse, bool naive) {
+void flock(int n, int window_width, int window_height, float3 target, bool followMouse, bool naive, float sep_dist, float sep_weight, float ali_dist, float ali_weight, float coh_dist, float coh_weight) {
 	dim3 fullBlocksPerGrid((int)ceil(float(n) / float(BlockSize)));
 
-	flocking << <fullBlocksPerGrid, BlockSize >> >(n, dev_pos, dev_vel, dev_acc, target, followMouse);
+	copyParametersKernel << <fullBlocksPerGrid, BlockSize >> > (sep_dist, sep_weight, ali_dist, ali_weight, coh_dist, coh_weight);
+
+	SeparationKernel <<<fullBlocksPerGrid, BlockSize>>>(n, dev_pos, dev_vel_results, target, followMouse, dev_sep);
+	AlignmentKernel << <fullBlocksPerGrid, BlockSize >> >(n, dev_pos, dev_vel_results, dev_ali);
+	CohesionKernel << <fullBlocksPerGrid, BlockSize >> >(n, dev_pos, dev_vel_results, dev_coh);
+
+	flocking << <fullBlocksPerGrid, BlockSize >> >(n, dev_pos, dev_vel, dev_acc, target, followMouse, dev_sep, dev_ali, dev_coh);
 	updatePosition << <fullBlocksPerGrid, BlockSize >> >(n, 0.5, dev_pos, dev_vel, dev_acc, window_width, window_height, naive);
 }
 
