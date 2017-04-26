@@ -4,7 +4,8 @@ DBG      ?=
 NVCC     ?= nvcc
 CUDA_HOME?= $(TACC_CUDA_DIR)
 #CUDA_HOME?= /Developer/NVIDIA/CUDA-8.0/
-NVFLAGS  = -I$(CUDA_HOME)include -I$(CUDA_HOME)samples/common/inc --ptxas-options="-v" -gencode=arch=compute_35,code=\"sm_35,compute_35\"
+#GLFW_HOME?= ~/cuda-boids/GLFW/
+NVFLAGS  = -I$(CUDA_HOME)include -I$(CUDA_HOME)samples/common/inc -I/$(GLFW_HOME)includes --ptxas-options="-v" -gencode=arch=compute_35,code=\"sm_35,compute_35\"
 CXXFLAGS = -O3 -I. -I$(COMMON) $(DBG) -g -G
 
 EXEC = main
@@ -18,7 +19,7 @@ DEPS = $(OBJS:.o=.d)
 
 # Load common make options
 include $(COMMON)/Makefile.common
-LDFLAGS	= $(COMMON_LIBS) -lcudart -Xlinker -L$(CUDA_HOME)lib64 -lglut -lGL -lGLU -lglfw3
+LDFLAGS	= $(COMMON_LIBS) -lcudart -Xlinker -L$(CUDA_HOME)lib64 -L$(GLFW_HOME)lib64 -lglut -lGL -lGLU -lglfw3
 #LDFLAGS = $(COMMON_LIBS) -lcudart -Xlinker -framework,OpenGL,-framework,GLUT #-L$(CUDA_HOME)lib64 -lglut -lGLU -lGL
 
 %.o: %.cu

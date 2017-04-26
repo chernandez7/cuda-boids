@@ -3,7 +3,7 @@
 #define GLSLUTILITY_H_
 
 #ifdef __APPLE__
-#include <GL/glfw.h>
+#include <GLFW/glfw3.h>
 #else
 #include <GL/glew.h>
 #endif

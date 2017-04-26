@@ -19,10 +19,7 @@
 #else
 #include <GL/glew.h>
 #include <GL/glut.h>
-//#ifdef _WIN32
 #include <GLFW/glfw3.h>
-//#endif
-//#include <GLFW/glfw.h>
 
 #include "glslUtility.h"
 #include "glm/glm.hpp"
