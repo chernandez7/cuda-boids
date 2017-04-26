@@ -10,7 +10,7 @@
 
 __host__
 int main(int argc, char* argv[]) {
-	/*
+	
 	// Parse command line parameters
 	for (int i = 1; i < argc; i++) {
 #define check_index(i,str) \
@@ -29,7 +29,7 @@ int main(int argc, char* argv[]) {
 		}
 		else if (strcmp(argv[i], "--mouse") == 0 || strcmp(argv[i], "-m") == 0) {
 		followMouse = true;
-		} else if (strcmp(argv[i], "--naive") == 0) == 0) {
+		} else if (strcmp(argv[i], "--naive") == 0) {
 		naive = true;
 		} else {
 			fprintf(stderr, "Unknown option %s\n", argv[i]);
@@ -37,10 +37,10 @@ int main(int argc, char* argv[]) {
 			return 1;
 		}
 	}
-	*/
-	nBoids = 512;
-	followMouse = false;
-	naive = false;
+	
+	//nBoids = 512;
+	//followMouse = false;
+	//naive = false;
 
 	// OpenGL / GLUT Initialization
 	Init(argc, argv);
@@ -267,9 +267,9 @@ void help() {
 __host__
 void runCUDA(bool followMouse, float sep_dist, float sep_weight, float ali_dist, float ali_weight, float coh_dist, float coh_weight) {
 
-	float* dptrvert = nullptr;
-	float* velptr = nullptr;
-	float* accptr = nullptr;
+	float* dptrvert = NULL;
+	float* velptr = NULL;
+	float* accptr = NULL;
 
 	// Map BO to array
 	cudaGLMapBufferObject((void**)&dptrvert, positionVBO);
